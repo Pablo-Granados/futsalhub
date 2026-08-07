@@ -1,0 +1,3374 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B0F14" />
+  <title>ARF Futsal | Fixture en vivo</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=Roboto+Mono:wght@500;600&display=swap"
+    rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          cancha:   '#0B0F14',
+          surface:  '#121821',
+          elevado:  '#1A2230',
+          borde:    'rgba(255,255,255,0.06)',
+          accent:   '#35D07F',
+          live:     '#FF4B55',
+          warning:  '#FFC93C',
+          texto:    '#F2F5F8',
+          muted:    '#8894A3',
+        },
+        fontFamily: {
+          display: ['Oswald', 'sans-serif'],
+          body: ['Inter', 'sans-serif'],
+          mono: ['Roboto Mono', 'monospace'],
+        },
+      },
+    },
+  };
+  </script>
+
+  <style>
+    .lineas-cancha {
+      background-image: repeating-linear-gradient(135deg,
+          rgba(53, 208, 127, 0.10) 0px,
+          rgba(53, 208, 127, 0.10) 2px,
+          transparent 2px,
+          transparent 14px);
+    }
+
+    .punteada-central {
+      background-image: repeating-linear-gradient(to right,
+          rgba(255, 255, 255, 0.14) 0, rgba(255, 255, 255, 0.14) 6px,
+          transparent 6px, transparent 12px);
+    }
+
+    @keyframes pulso-vivo {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.45;
+        transform: scale(0.85);
+      }
+    }
+
+    .punto-vivo {
+      animation: pulso-vivo 1.3s ease-in-out infinite;
+    }
+
+    @keyframes brillo-skeleton {
+      0% {
+        background-position: -200px 0;
+      }
+
+      100% {
+        background-position: 200px 0;
+      }
+    }
+
+    @keyframes destacadosIn {
+      from {
+        opacity: 0;
+        transform: translateY(-6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .destacados-in {
+      animation: destacadosIn 0.25s ease-out;
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #171f2a 25%, #202b3a 37%, #171f2a 63%);
+      background-size: 400px 100%;
+      animation: brillo-skeleton 1.4s ease-in-out infinite;
+    }
+
+    ::-webkit-scrollbar {
+      display: none;
+    }
+
+    * {
+      scrollbar-width: none;
+    }
+  </style>
+  <script defer src="https://cloud.umami.is/script.js" data-website-id="6e64ba6f-14db-4908-9251-0f9e83fbf2ce"></script>
+</head>
+
+<body class="bg-[#05070a] font-body text-texto">
+
+  <div class="max-w-md mx-auto min-h-screen bg-cancha shadow-2xl shadow-black/50 relative">
+
+    <!-- HEADER -->
+    <header class="sticky top-0 z-20 bg-cancha/95 backdrop-blur border-b border-borde lineas-cancha">
+      <div class="flex items-center justify-between px-4 pt-4">
+        <div id="app-title" class="select-none">
+          <p class="text-[11px] uppercase tracking-[0.2em] text-muted font-medium">Desarrollado por Pablo Granados</p>
+          <h1 class="font-display text-2xl font-semibold tracking-wide -mt-0.5">FUTSAL
+            <span class="text-accent">HUB</span>
+          </h1>
+          <p id="contador-visitas-total" class="hidden text-[10px] text-muted mt-0.5"></p>
+        </div>
+        <div class="flex items-center gap-2">
+          <div id="contador-vivos"
+            class="hidden items-center gap-1.5 bg-live/10 border border-live/30 rounded-full px-2.5 py-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-live punto-vivo"></span>
+            <span class="font-mono text-[11px] font-semibold text-live"></span>
+          </div>
+          <button id="btn-actualizar" title="Actualizar datos" class="w-8 h-8 flex items-center justify-center rounded-full bg-elevado text-muted active:opacity-60 flex-shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+          <button id="btn-feedback" title="Reportar un problema" class="w-8 h-8 flex items-center justify-center rounded-full bg-elevado text-muted active:opacity-60 flex-shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3M16 2v3M12 22c-4 0-7-3-7-7v-3a7 7 0 0 1 14 0v3c0 4-3 7-7 7Z"/><path d="M2 13h3M19 13h3M12 8v4M4 6l2 2M20 6l-2 2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <nav id="tabs-categorias" class="px-4 py-3"></nav>
+      <nav id="tabs-temporada" class="hidden px-4 pb-3"></nav>
+    </header>
+
+    <!-- BANNER DE ESTADO (offline / actualizando) -->
+    <div id="banner-estado" class="hidden mx-4 mt-3 px-3 py-2 rounded-xl text-[11px] font-medium"></div>
+
+    <!-- CONTENIDO -->
+    <main id="contenido" class="px-4 py-4 pb-32">
+      <div id="skeleton" class="space-y-3"></div>
+      <div id="vista-contenido" class="hidden space-y-3"></div>
+      <div id="estado-error" class="hidden text-center py-16">
+        <p class="text-muted text-sm">No se pudo cargar la información.</p>
+        <button onclick="cargarDatos()" class="mt-3 text-xs font-semibold text-accent border border-accent/40 rounded-full px-4 py-2">
+          Reintentar
+        </button>
+      </div>
+    </main>
+
+    <!-- NAV INFERIOR -->
+    <nav class="fixed bottom-0 left-0 right-0 z-30">
+      <div class="max-w-md mx-auto bg-surface/95 backdrop-blur border-t border-borde flex">
+        <button data-vista="partidos" class="btn-nav text-accent flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 10h18"/><path d="M8 2v4M16 2v4"/></svg>
+          <span class="text-[10px] font-semibold uppercase tracking-wide">Partidos</span>
+        </button>
+        <button data-vista="tabla" class="btn-nav text-muted flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          <span class="text-[10px] font-semibold uppercase tracking-wide">Tabla</span>
+        </button>
+        <button data-vista="equipos" class="btn-nav text-muted flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z"/></svg>
+          <span class="text-[10px] font-semibold uppercase tracking-wide">Equipos</span>
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- MODAL DE EQUIPO -->
+  <div id="modal-equipo" class="hidden fixed inset-0 z-40 flex items-center justify-center px-4">
+    <div class="absolute inset-0 bg-black/70" onclick="cerrarModalEquipo()"></div>
+    <div class="relative bg-surface border border-borde rounded-3xl w-full max-w-md p-5 max-h-[80vh] overflow-y-auto">
+      <button id="btn-volver-modal" onclick="volverModalEquipo()" class="hidden absolute top-3 left-3 text-muted text-lg leading-none">←</button>
+      <button onclick="cerrarModalEquipo()" class="absolute top-3 right-3 text-muted text-lg leading-none">✕</button>
+      <div id="modal-contenido"></div>
+    </div>
+  </div>
+
+  <!-- MODAL DE FEEDBACK -->
+  <div id="modal-feedback" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div class="absolute inset-0 bg-black/70" onclick="cerrarModalFeedback()"></div>
+    <div class="relative bg-surface border border-borde rounded-3xl w-full max-w-md p-5">
+      <button onclick="cerrarModalFeedback()" class="absolute top-3 right-3 text-muted text-lg leading-none">✕</button>
+      <h2 class="font-display text-lg tracking-wide mb-1">Reportar un problema</h2>
+      <p class="text-xs text-muted mb-3">Contanos qué viste raro — mandamos el contexto de la pantalla junto con tu
+        mensaje.</p>
+
+      <textarea id="feedback-texto" rows="4" placeholder="Ej: el resultado de Banco Nación vs Sirio está mal..." class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted resize-none"></textarea>
+
+      <button onclick="enviarFeedback()" class="w-full mt-3 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Enviar</button>
+      <p id="feedback-estado-envio" class="text-center text-xs text-muted mt-2 min-h-[16px]"></p>
+    </div>
+  </div>
+
+  <!-- BANNER FIJO DE SPONSOR (arriba de la barra de navegación, rota solo) -->
+  <div id="banner-sponsor-fijo" class="hidden fixed bottom-[60px] left-0 right-0 z-30 px-4 pb-1.5"></div>
+
+  <!-- CARTEL GRANDE DE SPONSOR (carga inicial + cada 10 navegaciones) -->
+  <div id="modal-sponsor-grande" class="hidden fixed inset-0 z-[70] flex items-center justify-center px-4">
+    <div class="absolute inset-0 bg-black/85"></div>
+    <div class="relative bg-surface border border-borde rounded-3xl p-6 max-w-sm w-full text-center">
+      <button id="sponsor-grande-cerrar" onclick="cerrarSponsorGrande()" class="absolute top-3 right-3 text-muted text-lg leading-none">✕</button>
+      <p class="text-[9px] uppercase tracking-wide text-muted mb-3">Publicidad</p>
+
+      <a id="sponsor-grande-link-visual" href="#" target="_blank" rel="noopener" class="block">
+        <img id="sponsor-grande-img" src="" alt="" class="w-full aspect-square rounded-2xl object-contain bg-elevado mx-auto mb-3"/>
+        <p id="sponsor-grande-nombre" class="text-base font-semibold text-texto mb-4"></p>
+      </a>
+      <a id="sponsor-grande-link" href="#" target="_blank" rel="noopener" class="block w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Ver más</a>
+      <div id="sponsor-grande-progreso" class="hidden mt-4">
+        <div class="h-1.5 bg-elevado rounded-full overflow-hidden">
+          <div id="sponsor-grande-progreso-fill" class="h-full bg-accent transition-all duration-200" style="width:0%">
+          </div>
+        </div>
+        <p id="sponsor-grande-progreso-texto" class="text-[10px] text-muted mt-1.5">Cargando datos… 0%</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE TIP / ONBOARDING (lectura obligatoria la primera vez) -->
+  <div id="modal-tip" class="hidden fixed inset-0 z-[60] flex items-center justify-center px-6">
+    <div class="absolute inset-0 bg-black/80"></div>
+    <div class="relative bg-surface border border-borde rounded-3xl p-6 max-w-xs w-full text-center">
+      <span class="text-3xl">💡</span>
+      <p id="tip-modal-mensaje" class="text-sm text-texto leading-snug mt-3 mb-5"></p>
+      <button id="tip-modal-btn" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Entendido</button>
+    </div>
+  </div>
+
+  <!-- MODAL DE ADMIN (PIN + panel de carga) — se abre solo con el gesto oculto -->
+  <div id="modal-admin" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div class="absolute inset-0 bg-black/70" onclick="cerrarModalAdmin()"></div>
+    <div class="relative bg-surface border border-borde rounded-3xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto">
+      <button onclick="cerrarModalAdmin()" class="absolute top-3 right-3 text-muted text-lg leading-none">✕</button>
+      <div id="admin-contenido"></div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+ *  CONFIGURACIÓN 
+ * ============================================================ */
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyNynwx8VfnEkSYHQZAeuz2r0CuhenLMtRdnt0iAixk5ic26rPhy1L3m5Sxm4m0GHXv/exec';
+const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mdaqpevw'; // 
+const CACHE_KEY = 'arf_futsal_datos_v1';
+
+const ORDEN_CATEGORIAS = ['Primera A', 'Reserva A', 'Femenino A', 'Primera B', 'Reserva B'];
+
+const CATEGORIAS_CON_ASCENSO = ['Primera B'];
+const CATEGORIAS_CON_DESCENSO = ['Primera A', 'Femenino A'];
+
+// Override manual: cuando un descenso se definió por triangular/desempate
+// en vez de directamente por tabla, se declara acá.
+// clave = "categoria|temporada", valor = array de nombres de equipo (tal
+// cual figuran en la hoja "equipos") que efectivamente descendieron.
+const DESCENSOS_MANUALES = {
+  'Femenino A|2025': ['Náutico'],
+};
+
+function tieneDescenso(categoria) {
+  return CATEGORIAS_CON_DESCENSO.includes(categoria);
+}
+
+function tieneAscenso(categoria) {
+  return CATEGORIAS_CON_ASCENSO.includes(categoria);
+}
+
+function temporadaEnCurso(categoria, temporada) {
+  return PARTIDOS.some((p) =>
+    p.categoria === categoria && String(p.temporada) === String(temporada) &&
+    normalizarFase(p.fase) === 'Regular' &&
+    normalizarEstado(p.estado) !== 'finalizado'
+  );
+}
+
+function obtenerTemporadasDisponibles(categoriaFiltro) {
+  const valores = new Set();
+  PARTIDOS.forEach((p) => {
+    if (categoriaFiltro && categoriaFiltro !== 'Todas' && p.categoria !== categoriaFiltro) return;
+    if (p.temporada != null && p.temporada !== '') valores.add(String(p.temporada));
+  });
+  return Array.from(valores).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+}
+
+function filtrarPorTemporada(lista) {
+  const temporada = VISTA_ACTIVA === 'tabla' ? TEMPORADA_TABLA : TEMPORADA_ACTIVA;
+  if (!temporada) return lista;
+  return lista.filter((item) => String(item.temporada) === String(temporada));
+}
+
+function normalizarFase(faseRaw) {
+  const f = String(faseRaw || '').trim();
+  return f === '' ? 'Regular' : f;
+}
+
+function esFaseDesempate(fase) {
+  return /^desempate/i.test(String(fase || ''));
+}
+
+function resolverCampeonTabla(categoria, temporada, fase) {
+  const filas = calcularTabla(categoria, fase, temporada);
+  if (!filas.length) return null;
+
+  const idsEnTabla = new Set(filas.map((f) => String(f.id)));
+  const desempates = PARTIDOS.filter((p) =>
+    p.categoria === categoria && String(p.temporada) === String(temporada) &&
+    esFaseDesempate(normalizarFase(p.fase)) &&
+    normalizarEstado(p.estado) === 'finalizado' &&
+    idsEnTabla.has(String(p.id_local)) && idsEnTabla.has(String(p.id_visitante))
+  );
+
+  let campeonId = String(filas[0].id);
+  let subcampeonId = filas[1] ? String(filas[1].id) : null;
+  let partidoDesempate = null;
+
+  if (desempates.length) {
+    const decisivo = desempates[desempates.length - 1];
+    const res = determinarGanadorPartido(decisivo);
+    if (res.idGanador) {
+      campeonId = res.idGanador;
+      subcampeonId = String(decisivo.id_local) === campeonId ? String(decisivo.id_visitante) : String(decisivo.id_local);
+      partidoDesempate = decisivo;
+    }
+  }
+
+  return { campeonId, subcampeonId, partidoDesempate };
+}
+
+function etiquetaJornadaPartido(p) {
+  const fase = normalizarFase(p.fase);
+  if (fase === 'Regular') return `Fecha ${p.fecha_nro}`;
+  if (p.etiqueta_fecha) return String(p.etiqueta_fecha);
+  return fase;
+}
+
+function etiquetaParaJornada(jornada, listaCategoria) {
+  return `Fecha ${jornada}`;
+}
+
+function construirOpcionesJornadas(jornadasDisponibles, jornadaActiva, listaCategoriaCompleta) {
+  const grupos = new Map();
+
+  jornadasDisponibles.forEach((j) => {
+    const partidosJornada = listaCategoriaCompleta.filter((p) => Number(p.fecha_nro) === j);
+    const fasesJornada = [...new Set(partidosJornada.map((p) => normalizarFase(p.fase)))];
+
+    let clave;
+    if (fasesJornada.length === 1 && fasesJornada[0] === 'Regular') {
+      clave = 'Regular';
+    } else if (fasesJornada.every((f) => esFaseZonaEstricta(f))) {
+      clave = 'Zona Campeonato / Permanencia';
+    } else {
+      clave = fasesJornada.find((f) => f !== 'Regular') || fasesJornada[0];
+    }
+
+    if (!grupos.has(clave)) grupos.set(clave, []);
+    grupos.get(clave).push(j);
+  });
+
+  const claves = Array.from(grupos.keys()).sort((a, b) => {
+    if (a === 'Regular') return -1;
+    if (b === 'Regular') return 1;
+    return ordenFaseIndex(a) - ordenFaseIndex(b);
+  });
+
+  return claves
+    .map((clave) => {
+      const opciones = grupos.get(clave)
+        .map((j) => `<option value="${j}" ${j === jornadaActiva ? 'selected' : ''}>Fecha ${j}</option>`)
+        .join('');
+      return clave === 'Regular' ? opciones : `<optgroup label="${escaparHtml(clave)}">${opciones}</optgroup>`;
+    })
+    .join('');
+}
+
+function esFaseZona(fase) {
+  return /zona/i.test(fase) || /copa de plata/i.test(fase);
+}
+
+function esFaseBracket(fase) {
+  return /playoff|play\s*off|copa de oro/i.test(fase);
+}
+
+function ordenFaseIndex(fase) {
+  const f = String(fase || '').toLowerCase();
+  if (/zona campeonato/.test(f)) return 0;
+  if (/zona permanencia/.test(f)) return 1;
+  if (/copa de oro/.test(f)) return 2;
+  if (/playoff|play\s*off/.test(f)) return 3;
+  if (/copa de plata/.test(f)) return 4;
+  return 5;
+}
+
+function clavePartido(p) {
+  return [p.categoria, p.temporada, p.fase, p.fecha_nro, p.id_local, p.id_visitante].join('|');
+}
+
+function analizarRondaBracket(fechaTexto) {
+  const t = String(fechaTexto || '').toLowerCase();
+  let ronda = 'otra';
+  if (t.includes('8vo') || t.includes('octavo')) ronda = 'octavos';
+  else if (t.includes('4to') || t.includes('cuarto')) ronda = 'cuartos';
+  else if (t.includes('semi')) ronda = 'semifinal';
+  else if (t.includes('final')) ronda = 'final';
+  return { ronda };
+}
+
+function determinarGanadorPartido(p) {
+  const gl = Number(p.goles_local) || 0;
+  const gv = Number(p.goles_visitante) || 0;
+  if (gl !== gv) {
+    return { idGanador: gl > gv ? String(p.id_local) : String(p.id_visitante), porPenales: false };
+  }
+  const pl = p.penales_local, pv = p.penales_visitante;
+  if (pl !== undefined && pl !== null && pl !== '' && pv !== undefined && pv !== null && pv !== '') {
+    const npl = Number(pl), npv = Number(pv);
+    if (npl !== npv) {
+      return {
+        idGanador: npl > npv ? String(p.id_local) : String(p.id_visitante),
+        porPenales: true,
+        penalesLocal: npl,
+        penalesVisitante: npv,
+      };
+    }
+  }
+  return { idGanador: null, porPenales: false };
+}
+
+function generarSelectorTemporada(temporadas) {
+  const nav = document.getElementById('tabs-temporada');
+  const mostrarEnEstaVista = VISTA_ACTIVA !== 'equipos' && (VISTA_ACTIVA !== 'partidos' || CATEGORIA_ACTIVA !== 'Todas');
+
+  if (temporadas.length <= 1 || !mostrarEnEstaVista) {
+    nav.classList.add('hidden');
+    nav.innerHTML = '';
+    return;
+  }
+
+  const temporadaActual = VISTA_ACTIVA === 'tabla' ? TEMPORADA_TABLA : TEMPORADA_ACTIVA;
+
+  nav.classList.remove('hidden');
+  nav.innerHTML = `
+    <select id="sel-temporada" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2 text-xs font-semibold text-muted">
+      ${temporadas.map((t) => `<option value="${t}" ${t === temporadaActual ? 'selected' : ''}>Temporada ${t}</option>`).join('')}
+    </select>
+  `;
+  document.getElementById('sel-temporada').addEventListener('change', (e) => {
+    const nuevaTemporada = e.target.value;
+    JORNADA_ACTIVA = null;
+
+    if (VISTA_ACTIVA === 'tabla') {
+      TEMPORADA_TABLA = nuevaTemporada;
+    } else {
+      TEMPORADA_ACTIVA = nuevaTemporada;
+    }
+
+    const categoriasNuevaTemporada = ordenarCategorias([...new Set(filtrarPorTemporada(PARTIDOS).map((p) => p.categoria).filter(Boolean))]);
+    if (VISTA_ACTIVA === 'tabla') {
+      if (CATEGORIA_TABLA !== 'Todas' && !categoriasNuevaTemporada.includes(CATEGORIA_TABLA)) {
+        CATEGORIA_TABLA = 'Todas';
+      }
+    } else if (CATEGORIA_ACTIVA !== 'Todas' && !categoriasNuevaTemporada.includes(CATEGORIA_ACTIVA)) {
+      CATEGORIA_ACTIVA = 'Todas';
+    }
+
+    generarTabsCategorias();
+    renderVistaActual();
+  });
+}
+
+function ordenarCategorias(categorias) {
+  return [...categorias].sort((a, b) => {
+    const ia = ORDEN_CATEGORIAS.indexOf(a);
+    const ib = ORDEN_CATEGORIAS.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
+let CLUB_PERFIL_ACTUAL = null;
+let PERFIL_FILTRO_CATEGORIA = null; // null = todas
+let PERFIL_FILTRO_TEMPORADA = null; // null = todas
+
+let ADMIN_PIN_ACTUAL = null;
+let ADMIN_CATEGORIA = null;
+let ADMIN_JORNADA = null;
+
+let SPONSORS = [];
+let SPONSOR_INTERVALO = null;
+let SPONSOR_INDICE = 0;
+let TOAST_SPONSOR_TIMEOUT = null;
+let SPONSOR_GRANDE_SESION_MOSTRADO = false;
+let SPONSOR_MODAL_BLOQUEADO = false;
+let SPONSOR_PROGRESO_INTERVALO = null;
+let SPONSOR_PROGRESO_PORCENTAJE = 0;
+
+let H2H_HISTORIAL_ACTUAL = [];
+let H2H_PAGINA = 0;
+const H2H_POR_PAGINA = 5;
+
+let CONTADOR_NAVEGACIONES = 0;
+let BANNER_SPONSOR_INTERVALO = null;
+
+let MEDALLERO_EXPANDIDO = false;
+let EVITAR_BLUR_ACTUALIZACION = false;
+
+function calcularTitulosCategoriaTemporada(categoria, temporada) {
+  const partidos = PARTIDOS.filter((p) => p.categoria === categoria && String(p.temporada) === String(temporada));
+  const fasesPresentes = [...new Set(partidos.map((p) => normalizarFase(p.fase)))];
+  const titulos = [];
+  const ascensos = [];
+  let idAscensoDirecto = null;
+
+  if (tieneAscenso(categoria)) {
+    const zc = fasesPresentes.find((f) => /zona campeonato/i.test(f));
+    if (zc) {
+      const resuelto = resolverCampeonTabla(categoria, temporada, zc);
+      if (resuelto) {
+        idAscensoDirecto = resuelto.campeonId;
+        ascensos.push({ id: idAscensoDirecto, partidos: resuelto.partidoDesempate ? [resuelto.partidoDesempate] : [] });
+      }
+    }
+  }
+
+  fasesPresentes.forEach((fase) => {
+    if (fase === 'Regular') return;
+    if (esFaseDesempate(fase)) return;
+    if (esFaseZonaEstricta(fase)) return;
+
+    if (esFaseBracket(fase)) {
+      const partidosFase = partidos.filter((p) => normalizarFase(p.fase) === fase);
+      const porRonda = new Map();
+      partidosFase.forEach((p) => {
+        const { ronda } = analizarRondaBracket(p.etiqueta_fecha || p.fecha_nro);
+        if (!porRonda.has(ronda)) porRonda.set(ronda, []);
+        porRonda.get(ronda).push(p);
+      });
+      const finalPartidos = porRonda.get('final');
+      if (finalPartidos) {
+        const cruces = agruparCruces(finalPartidos);
+        if (cruces.length === 1 && cruces[0].definido) {
+          const c = cruces[0];
+          const campeonId = c.ganadorA ? c.idA : c.idB;
+          const subcampeonId = c.ganadorA ? c.idB : c.idA;
+          const partidosOrdenados = [...c.partidos].sort((a, b) => Number(a.fecha_nro) - Number(b.fecha_nro));
+
+          const esFasePlayoff = /playoff|play\s*off/i.test(fase);
+          if (esFasePlayoff && tieneAscenso(categoria)) {
+            if (campeonId !== idAscensoDirecto) ascensos.push({ id: campeonId, partidos: partidosOrdenados });
+          } else {
+            titulos.push({ fase, campeonId, subcampeonId, partidos: partidosOrdenados });
+          }
+        }
+      }
+    } else {
+      const resuelto = resolverCampeonTabla(categoria, temporada, fase);
+      if (resuelto) {
+        titulos.push({
+          fase,
+          campeonId: resuelto.campeonId,
+          subcampeonId: resuelto.subcampeonId,
+          partidos: resuelto.partidoDesempate ? [resuelto.partidoDesempate] : [],
+        });
+      }
+    }
+  });
+
+  return { titulos, ascensos };
+}
+
+function calcularPalmares() {
+  const combos = new Set();
+  PARTIDOS.forEach((p) => {
+    if (p.categoria && p.temporada != null && p.temporada !== '') combos.add(p.categoria + '||' + p.temporada);
+  });
+
+  const porClub = new Map();
+  function obtenerEntrada(equipo) {
+    const clave = claveClub(equipo);
+    if (!porClub.has(clave)) {
+      porClub.set(clave, { _clave: clave, nombre: equipo.nombre, url_escudo: equipo.url_escudo, oros: 0, platas: 0, copaPlata: 0, ascensos: 0, descensos: 0, detalle: [] });
+    }
+    return porClub.get(clave);
+  }
+
+  combos.forEach((combo) => {
+    const [categoria, temporada] = combo.split('||');
+    const { titulos, ascensos } = calcularTitulosCategoriaTemporada(categoria, temporada);
+
+    titulos.forEach((t) => {
+      const esCopaPlata = /copa de plata/i.test(t.fase);
+      const eCampeon = obtenerEntrada(equipoInfo(t.campeonId));
+
+      if (esCopaPlata) {
+        eCampeon.copaPlata++;
+        eCampeon.detalle.push({ tipo: 'copaplata', categoria, temporada, fase: t.fase, partidos: t.partidos });
+      } else {
+        eCampeon.oros++;
+        eCampeon.detalle.push({ tipo: 'campeon', categoria, temporada, fase: t.fase, partidos: t.partidos });
+        if (t.subcampeonId) {
+          const eSub = obtenerEntrada(equipoInfo(t.subcampeonId));
+          eSub.platas++;
+          eSub.detalle.push({ tipo: 'subcampeon', categoria, temporada, fase: t.fase, partidos: t.partidos });
+        }
+      }
+    });
+
+    ascensos.forEach((a) => {
+      const e = obtenerEntrada(equipoInfo(a.id));
+      e.ascensos++;
+      e.detalle.push({ tipo: 'ascenso', categoria, temporada, fase: 'Ascenso', partidos: a.partidos });
+    });
+
+    if (tieneDescenso(categoria)) {
+      const fasesZonaEstrictasDeCombo = [...new Set(
+        PARTIDOS.filter((p) => p.categoria === categoria && String(p.temporada) === String(temporada))
+          .map((p) => normalizarFase(p.fase))
+      )].filter((f) => esFaseZonaEstricta(f));
+
+      if (fasesZonaEstrictasDeCombo.length) {
+        const filasGeneral = calcularTablaMultiFase(categoria, ['Regular', ...fasesZonaEstrictasDeCombo], temporada);
+        const n = Math.min(CANTIDAD_DESCENSO_GENERAL, filasGeneral.length);
+        filasGeneral.slice(filasGeneral.length - n).forEach((f) => {
+          const e = obtenerEntrada(f.equipo);
+          e.descensos++;
+          e.detalle.push({ tipo: 'descenso', categoria, temporada, fase: 'Descenso', partidos: [] });
+        });
+      } else if (!temporadaEnCurso(categoria, temporada)) {
+        const claveOverride = categoria + '|' + temporada;
+        const nombresManual = DESCENSOS_MANUALES[claveOverride];
+
+        if (nombresManual) {
+          // Descenso definido manualmente (ej. triangular de desempate).
+          const partidosDesempate = PARTIDOS.filter((p) =>
+            p.categoria === categoria && String(p.temporada) === String(temporada) &&
+            /^desempate desc/i.test(normalizarFase(p.fase))
+          );
+          nombresManual.forEach((nombre) => {
+            const equipoEncontrado = EQUIPOS.find((eq) => eq.categoria === categoria && normalizarClub(eq.nombre) === normalizarClub(nombre));
+            if (!equipoEncontrado) return;
+            const e = obtenerEntrada(equipoEncontrado);
+            e.descensos++;
+            e.detalle.push({ tipo: 'descenso', categoria, temporada, fase: 'Descenso', partidos: partidosDesempate });
+          });
+        } else {
+          // Caso normal: últimas posiciones de la Fase Regular (30 fechas).
+          const filasRegular = calcularTabla(categoria, 'Regular', temporada);
+          const n = Math.min(CANTIDAD_DESCENSO_GENERAL, filasRegular.length);
+          filasRegular.slice(filasRegular.length - n).forEach((f) => {
+            const e = obtenerEntrada(f.equipo);
+            e.descensos++;
+            e.detalle.push({ tipo: 'descenso', categoria, temporada, fase: 'Descenso', partidos: [] });
+          });
+        }
+      }
+    }
+  });
+
+  return porClub;
+}
+
+function toggleMedallero() {
+  MEDALLERO_EXPANDIDO = !MEDALLERO_EXPANDIDO;
+  renderEquipos();
+}
+
+function bloqueMedallero() {
+  const mapa = calcularPalmares();
+  const lista = Array.from(mapa.values()).filter((c) => c.oros > 0 || c.platas > 0 || c.ascensos > 0 || c.descensos > 0);
+  if (!lista.length) return '';
+
+  return `
+    <button onclick="abrirModalMedalleroGeneral()" class="w-full flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mb-3">
+      <span class="text-xs font-semibold text-texto">🏆 Palmarés</span>
+      <span class="text-[11px] text-muted">Ver medallero →</span>
+    </button>
+  `;
+}
+
+let PALMARES_FILTRO_CATEGORIA_GENERAL = null;
+
+function abrirModalMedalleroGeneral() {
+  document.getElementById('btn-volver-modal').classList.add('hidden');
+  renderMedalleroGeneral();
+  document.getElementById('modal-equipo').classList.remove('hidden');
+}
+
+function renderMedalleroGeneral() {
+  const mapa = calcularPalmares();
+  let lista = Array.from(mapa.values()).filter((c) => c.oros > 0 || c.platas > 0 || c.copaPlata > 0);
+
+  if (PALMARES_FILTRO_CATEGORIA_GENERAL) {
+    lista = lista.filter((c) =>
+      c.detalle.some((d) =>
+        d.categoria === PALMARES_FILTRO_CATEGORIA_GENERAL &&
+        (d.tipo === 'campeon' || d.tipo === 'subcampeon' || d.tipo === 'copaplata')
+      )
+    );
+  }
+
+  lista.sort((a, b) => b.oros - a.oros || b.platas - a.platas || a.nombre.localeCompare(b.nombre));
+
+  const categoriasDisponibles = ordenarCategorias([...new Set(
+    Array.from(mapa.values()).flatMap((c) => c.detalle.filter((d) => ['campeon', 'subcampeon', 'copaplata'].includes(d.tipo)).map((d) => d.categoria))
+  )]);
+
+  const selectorCategoria = categoriasDisponibles.length > 1 ? `
+    <select id="sel-palmares-categoria-general" class="w-full bg-elevado border border-borde rounded-xl px-2 py-2 text-xs text-texto mb-3">
+      <option value="">Todas las categorías</option>
+      ${categoriasDisponibles.map((c) => `<option value="${c}" ${c === PALMARES_FILTRO_CATEGORIA_GENERAL ? 'selected' : ''}>${escaparHtml(c)}</option>`).join('')}
+    </select>
+  ` : '';
+
+  const filas = lista
+    .map((c, i) => `
+      <tr class="border-b border-borde last:border-0 cursor-pointer active:bg-elevado/60" data-palmares-club="${escaparHtml(c._clave)}">
+        <td class="py-2 pl-1 font-mono text-[10px] text-muted">${i + 1}</td>
+        <td class="py-2 pr-1">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <img src="${c.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(c.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+            <span class="text-xs truncate">${escaparHtml(c.nombre)}</span>
+          </div>
+        </td>
+        <td class="py-2 text-center font-mono text-[10px] font-semibold">${iconoPalmares('campeon')}${c.oros}</td>
+        <td class="py-2 text-center font-mono text-[10px] font-semibold">${iconoPalmares('subcampeon')}${c.platas}</td>
+        <td class="py-2 pr-1 text-center font-mono text-[10px] font-semibold">${iconoPalmares('copaplata')}${c.copaPlata}</td>
+      </tr>
+    `)
+    .join('');
+
+  document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-1">🏆 Palmarés general</h2>
+    <p class="text-[10px] text-muted mb-3">${iconoPalmares('campeon')} Campeón · ${iconoPalmares('subcampeon')} Subcampeón · ${iconoPalmares('copaplata')} Copa de Plata</p>
+    ${selectorCategoria}
+    <div class="bg-surface border border-borde rounded-2xl overflow-hidden">
+      <table class="w-full text-left">
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+  `;
+
+  if (categoriasDisponibles.length > 1) {
+    document.getElementById('sel-palmares-categoria-general').addEventListener('change', (e) => {
+      PALMARES_FILTRO_CATEGORIA_GENERAL = e.target.value || null;
+      renderMedalleroGeneral();
+    });
+  }
+}
+
+function bloquePalmaresClub(clubReferencia) {
+  const mapa = calcularPalmares();
+  const entrada = mapa.get(claveClub(clubReferencia));
+  if (!entrada || !entrada.detalle.length) return '';
+
+  return `
+    <button onclick='abrirModalPalmares(${JSON.stringify(claveClub(clubReferencia))})' class="w-full flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mb-5">
+      <span class="text-xs font-semibold text-texto">🏆 Palmarés</span>
+<span class="text-[11px] font-mono text-muted">${iconoPalmares('campeon')}${entrada.oros} ${iconoPalmares('subcampeon')}${entrada.platas} ${iconoPalmares('copaplata')}${entrada.copaPlata} ${iconoPalmares('ascenso')}${entrada.ascensos} ${iconoPalmares('descenso')}${entrada.descensos}</span>
+    </button>
+  `;
+}
+
+function bloquePartidosTitulo(t) {
+  if (!t.partidos || !t.partidos.length) return '';
+  const partidosOrdenados = [...t.partidos].sort((a, b) => Number(a.fecha_nro) - Number(b.fecha_nro));
+  const filas = partidosOrdenados.map(filaLegCruce).join('');
+
+  const idsInvolucrados = new Set(partidosOrdenados.flatMap((p) => [String(p.id_local), String(p.id_visitante)]));
+  const esCrucePar = idsInvolucrados.size === 2;
+
+  let global = '';
+  if (partidosOrdenados.length > 1 && esCrucePar) {
+    const idsEquipos = [...idsInvolucrados];
+    const [idA, idB] = idsEquipos;
+    let golesA = 0, golesB = 0;
+    partidosOrdenados.forEach((p) => {
+      const aEsLocal = String(p.id_local) === idA;
+      golesA += aEsLocal ? (Number(p.goles_local) || 0) : (Number(p.goles_visitante) || 0);
+      golesB += aEsLocal ? (Number(p.goles_visitante) || 0) : (Number(p.goles_local) || 0);
+    });
+    const eqA = equipoInfo(idA), eqB = equipoInfo(idB);
+    global = `
+      <div class="flex items-center justify-between text-xs bg-elevado/40 rounded-xl px-3 py-2 mt-1">
+        <span class="truncate flex-1">${escaparHtml(eqA.nombre)}</span>
+        <span class="font-mono font-semibold px-2 flex-shrink-0">${golesA} - ${golesB}</span>
+        <span class="truncate flex-1 text-right">${escaparHtml(eqB.nombre)}</span>
+      </div>
+      <p class="text-[9px] text-muted text-center mb-1">Global</p>
+    `;
+  }
+
+  return `<div class="space-y-1.5 mt-1 mb-2">${filas}${global}</div>`;
+}
+
+function abrirModalPalmares(claveClubSeleccionado, volverMedallero) {
+  PALMARES_CLUB_ACTUAL = claveClubSeleccionado;
+  PALMARES_VOLVER_MEDALLERO = !!volverMedallero;
+  PALMARES_FILTRO_TIPO = null;
+  document.getElementById('btn-volver-modal').classList.toggle('hidden', !PALMARES_VOLVER_MEDALLERO);
+  renderModalPalmaresClub();
+  document.getElementById('modal-equipo').classList.remove('hidden');
+}
+
+function renderModalPalmaresClub() {
+  const mapa = calcularPalmares();
+  const entrada = mapa.get(PALMARES_CLUB_ACTUAL);
+  if (!entrada) return;
+
+  const tipos = ['campeon', 'subcampeon', 'copaplata', 'ascenso', 'descenso'];
+  const conteos = { campeon: entrada.oros, subcampeon: entrada.platas, copaplata: entrada.copaPlata, ascenso: entrada.ascensos, descenso: entrada.descensos };
+  const nombres = { campeon: 'Campeón', subcampeon: 'Subcampeón', copaplata: 'Campeón Copa de Plata', ascenso: 'Ascenso', descenso: 'Descenso' };
+
+  if (!PALMARES_FILTRO_TIPO || conteos[PALMARES_FILTRO_TIPO] === 0) {
+    PALMARES_FILTRO_TIPO = tipos.find((t) => conteos[t] > 0) || 'campeon';
+  }
+
+  const tabs = tipos
+    .filter((t) => conteos[t] > 0)
+    .map((t) => `
+      <button onclick="cambiarFiltroPalmares('${t}')" class="text-xs font-semibold px-3 py-1.5 rounded-full border ${PALMARES_FILTRO_TIPO === t ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">${iconoPalmares(t)} ${conteos[t]}</button>
+    `)
+    .join('');
+
+  const items = entrada.detalle.filter((t) => t.tipo === PALMARES_FILTRO_TIPO);
+  const ordenado = [...items].sort((a, b) => String(b.temporada).localeCompare(String(a.temporada), undefined, { numeric: true }));
+
+  const porCategoria = new Map();
+  ordenado.forEach((t) => {
+    if (!porCategoria.has(t.categoria)) porCategoria.set(t.categoria, []);
+    porCategoria.get(t.categoria).push(t);
+  });
+  const categoriasOrdenadas = ordenarCategorias([...porCategoria.keys()]);
+
+  const detalleHtml = categoriasOrdenadas.map((cat) => {
+    const lista = porCategoria.get(cat);
+    const bloques = lista.map((t) => {
+      const etiquetaFase = (t.tipo === 'ascenso' || t.tipo === 'descenso' || t.tipo === 'copaplata') ? '' : (t.fase ? ' ' + escaparHtml(t.fase) : '');
+      return `
+        <p class="text-[11px] font-semibold text-muted mt-2">${escaparHtml(t.temporada)}</p>
+        <p class="text-xs text-texto pl-3">${iconoPalmares(t.tipo)} ${escaparHtml(nombres[t.tipo])}${etiquetaFase}</p>
+        ${bloquePartidosTitulo(t)}
+      `;
+    }).join('');
+    return `<h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mt-3">${escaparHtml(cat)}</h3>${bloques}`;
+  }).join('');
+
+  document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center gap-3 mb-3">
+      <img src="${entrada.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(entrada.nombre)}');" class="w-14 h-14 rounded-xl object-cover bg-elevado flex-shrink-0"/>
+      <div class="min-w-0">
+        <h2 class="font-display text-xl tracking-wide truncate">${escaparHtml(entrada.nombre)}</h2>
+        <span class="text-[10px] text-muted uppercase tracking-wide">${iconoPalmares('campeon')}${entrada.oros} ${iconoPalmares('subcampeon')}${entrada.platas} ${iconoPalmares('copaplata')}${entrada.copaPlata} ${iconoPalmares('ascenso')}${entrada.ascensos} ${iconoPalmares('descenso')}${entrada.descensos}</span>
+      </div>
+    </div>
+    <div class="flex gap-2 mb-2 flex-wrap">${tabs}</div>
+    ${detalleHtml || '<p class="text-xs text-muted text-center py-6">Sin datos.</p>'}
+  `;
+}
+
+function cambiarFiltroPalmares(tipo) {
+  PALMARES_FILTRO_TIPO = tipo;
+  renderModalPalmaresClub();
+}
+
+function volverModalEquipo() {
+  if (PALMARES_VOLVER_MEDALLERO) abrirModalMedalleroGeneral();
+}
+
+/* ============================================================
+ *  CARGA DE DATOS CON CACHÉ LOCAL Y MANEJO DE ERRORES
+ * ============================================================ */
+function guardarCacheLocal(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ data, guardadoEn: Date.now() }));
+  } catch (e) { /* localStorage puede fallar en modo privado; no es crítico */ }
+}
+
+function leerCacheLocal() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function aplicarDatos(data, esFresco = true) {
+  const { equipos, partidos, jugadores } = data;
+  EQUIPOS = equipos;
+  EQUIPOS_POR_ID = new Map(equipos.map((eq) => [String(eq.id_equipo), eq]));
+  PARTIDOS = partidos;
+
+  JUGADORES_POR_EQUIPO = new Map();
+  (jugadores || []).forEach((j) => {
+    const key = String(j.id_equipo);
+    if (!JUGADORES_POR_EQUIPO.has(key)) JUGADORES_POR_EQUIPO.set(key, []);
+    JUGADORES_POR_EQUIPO.get(key).push(j);
+  });
+
+const temporadas = obtenerTemporadasDisponibles();
+  if (!TEMPORADA_ACTIVA || !temporadas.includes(TEMPORADA_ACTIVA)) {
+    TEMPORADA_ACTIVA = temporadas[0] || null;
+  }
+  if (!TEMPORADA_TABLA || !temporadas.includes(TEMPORADA_TABLA)) {
+    TEMPORADA_TABLA = temporadas[0] || null;
+  }
+  generarSelectorTemporada(temporadas);
+
+  generarTabsCategorias();
+  renderVistaActual();
+  aplicarSponsors(data, esFresco);
+}
+
+function generarTabsCategorias() {
+  const partidosTemporada = filtrarPorTemporada(PARTIDOS);
+  const categoriasDesdePartidos = [...new Set(partidosTemporada.map((p) => p.categoria).filter(Boolean))];
+  const categoriasBase = categoriasDesdePartidos.length
+    ? categoriasDesdePartidos
+    : [...new Set(filtrarPorTemporada(EQUIPOS).map((e) => e.categoria).filter(Boolean))];
+
+  const categorias = ['Todas', ...ordenarCategorias(categoriasBase)];
+  const nav = document.getElementById('tabs-categorias');
+  const categoriaActualDeLaVista = VISTA_ACTIVA === 'tabla' ? CATEGORIA_TABLA : CATEGORIA_ACTIVA;
+
+  nav.innerHTML = `
+    <select id="sel-categoria-principal" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2.5 text-sm font-semibold text-texto">
+      ${categorias.map((cat) => `<option value="${cat}" ${cat === categoriaActualDeLaVista ? 'selected' : ''}>${cat === 'Todas' ? 'Todas las categorías' : cat}</option>`).join('')}
+    </select>
+  `;
+
+  document.getElementById('sel-categoria-principal').addEventListener('change', (e) => {
+    if (VISTA_ACTIVA === 'tabla') {
+      CATEGORIA_TABLA = e.target.value;
+    } else {
+      CATEGORIA_ACTIVA = e.target.value;
+      FAVORITOS_PAGINA = 0;
+    }
+    renderVistaActual();
+  });
+}
+
+async function cargarDatos() {
+  const cacheLocal = leerCacheLocal();
+  const teniaCacheLocal = !!cacheLocal;
+
+if (teniaCacheLocal) {
+    aplicarDatos(cacheLocal.data, false);
+    mostrarBanner('info', 'Actualizando datos…');
+
+  } else {
+    mostrarSkeleton();
+  }
+
+  try {
+const res = await fetch(APPS_SCRIPT_URL + '?api=1&_=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('http_' + res.status);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'error_backend');
+
+    aplicarDatos(json.data, true);
+    guardarCacheLocal(json.data);
+    ocultarBanner();
+
+        if (typeof json.visitas === 'number') mostrarContadorVisitas(json.visitas);
+  } catch (err) {
+    console.error('Error cargando datos:', err);
+    if (SPONSOR_MODAL_BLOQUEADO) completarProgresoSponsor();
+
+    if (teniaCacheLocal) {
+      const sinConexion = !navigator.onLine || err.message === 'Failed to fetch';
+      mostrarBanner(
+        'error',
+        sinConexion
+          ? '📡 Sin conexión — mostrando los últimos datos guardados.'
+          : '⚠️ No se pudo actualizar — mostrando los últimos datos guardados.'
+      );
+    } else {
+      document.getElementById('skeleton').classList.add('hidden');
+      document.getElementById('vista-contenido').classList.add('hidden');
+      document.getElementById('estado-error').classList.remove('hidden');
+    }
+  }
+}
+
+function mostrarBanner(tipo, texto) {
+  const el = document.getElementById('banner-estado');
+  const contenido = document.getElementById('vista-contenido');
+  el.classList.remove('hidden', 'bg-elevado', 'text-muted', 'bg-live/10', 'text-live');
+  if (tipo === 'error') {
+    el.classList.add('bg-live/10', 'text-live');
+    el.innerHTML = `<span>${escaparHtml(texto)}</span>`;
+    contenido.classList.remove('blur-sm', 'pointer-events-none');
+  } else {
+    el.classList.add('bg-accent/15', 'text-accent');
+    el.innerHTML = `
+      <span class="inline-flex items-center gap-2">
+        <svg class="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        ${escaparHtml(texto)}
+      </span>
+    `;
+    if (EVITAR_BLUR_ACTUALIZACION) {
+      contenido.classList.remove('blur-sm', 'pointer-events-none');
+    } else {
+      contenido.classList.add('blur-sm', 'pointer-events-none');
+    }
+  }
+}
+
+function ocultarBanner() {
+  document.getElementById('banner-estado').classList.add('hidden');
+  document.getElementById('vista-contenido').classList.remove('blur-sm', 'pointer-events-none');
+}
+
+let EQUIPOS = [];
+let EQUIPOS_POR_ID = new Map();
+let PARTIDOS = [];
+let JUGADORES_POR_EQUIPO = new Map();
+let CATEGORIA_ACTIVA = 'Todas';
+let CATEGORIA_TABLA = 'Todas';
+let VISTA_ACTIVA = 'partidos';
+let JORNADA_ACTIVA = null;
+let PARTIDOS_FILTRO_ESTADO = 'porjugar';
+let TEMPORADA_ACTIVA = null; // usada por Partidos, Favoritos y Equipos
+let TEMPORADA_TABLA = null;  // exclusiva de la pestaña Tabla, no contamina el restolet CAMPEONES_TEMPORADA = {};
+let VISTA_ANTERIOR = null;
+let CAMPEONES_TEMPORADA = {};
+let DESEMPATES_TEMPORADA = {};
+window.ARF_RESULTADOS = { campeones: CAMPEONES_TEMPORADA, desempates: DESEMPATES_TEMPORADA };
+let CRUCES_INDEX = new Map();
+let FAVORITOS = new Set();
+let VISTA_PARTIDOS_FILTRO = 'todos';
+let FAVORITOS_ESTADO_FILTRO = 'programados';
+let FAVORITOS_PAGINA = 0;
+const FAVORITOS_POR_PAGINA = 10;
+let PALMARES_CLUB_ACTUAL = null;
+let PALMARES_FILTRO_TIPO = null;
+let PALMARES_VOLVER_MEDALLERO = false;
+
+/* ============================================================
+ *  NAV INFERIOR
+ * ============================================================ */
+
+document.querySelectorAll('.btn-nav').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    VISTA_ACTIVA = btn.dataset.vista;
+    document.querySelectorAll('.btn-nav').forEach((b) => {
+      const activo = b.dataset.vista === VISTA_ACTIVA;
+      b.classList.toggle('text-accent', activo);
+      b.classList.toggle('text-muted', !activo);
+    });
+    renderVistaActual();
+    registrarNavegacionParaSponsor();
+  });
+});
+
+function mostrarContadorVisitas(n) {
+  const el = document.getElementById('contador-visitas-total');
+  el.textContent = `👁 ${n.toLocaleString('es-AR')} visitas`;
+  el.classList.remove('hidden');
+}
+
+/* ============================================================
+ *  DISPATCH DE VISTAS
+ * ============================================================ */
+function renderVistaActual() {
+  document.getElementById('skeleton').classList.add('hidden');
+  document.getElementById('estado-error').classList.add('hidden');
+  document.getElementById('vista-contenido').classList.remove('hidden');
+  document.getElementById('contador-vivos').classList.add('hidden');
+
+  document.getElementById('tabs-categorias').classList.toggle('hidden', VISTA_ACTIVA === 'equipos');
+
+  // Solo resetea a la temporada más reciente cuando VENÍS de Tabla hacia otra
+  // pestaña — no en cada repintado dentro de la misma pestaña (eso pisaba
+  // la elección del usuario apenas la hacía).
+  if (VISTA_ANTERIOR === 'tabla' && VISTA_ACTIVA !== 'tabla') {
+const temporadas = obtenerTemporadasDisponibles(CATEGORIA_ACTIVA);
+    TEMPORADA_ACTIVA = temporadas[0] || null;
+  }
+  VISTA_ANTERIOR = VISTA_ACTIVA;
+
+generarSelectorTemporada(obtenerTemporadasDisponibles(CATEGORIA_ACTIVA));
+
+  if (VISTA_ACTIVA === 'partidos') renderPartidos();
+  else if (VISTA_ACTIVA === 'tabla') renderTabla();
+  else if (VISTA_ACTIVA === 'equipos') renderEquipos();
+}
+
+/* ============================================================
+ *  VISTA: PARTIDOS POR JORNADA
+ * ============================================================ */
+function obtenerJornadasDisponibles(lista) {
+  const jornadas = lista
+    .map((p) => p.fecha_nro)
+    .filter((f) => f !== null && f !== undefined && f !== '');
+  return Array.from(new Set(jornadas.map(Number))).sort((a, b) => a - b);
+}
+
+function elegirJornadaPorDefecto(jornadas, lista) {
+  if (!jornadas.length) return null;
+  const hoyStr = new Date().toISOString().slice(0, 10);
+
+  const conPendientes = jornadas.filter((j) =>
+    lista.some(
+      (p) =>
+        Number(p.fecha_nro) === j &&
+        (!p.fecha || p.fecha >= hoyStr) &&
+        normalizarEstado(p.estado) !== 'finalizado'
+    )
+  );
+  if (conPendientes.length) return conPendientes[0];
+
+return jornadas[jornadas.length - 1];
+}
+
+function seleccionarPartidosPorFechaMasProxima(partidos) {
+  const hoyStr = new Date().toISOString().slice(0, 10);
+  const conFecha = partidos.filter((p) => p.fecha);
+  if (!conFecha.length) return partidos;
+
+  const fechasPendientes = [...new Set(
+    conFecha
+      .filter((p) => normalizarEstado(p.estado) !== 'finalizado' && p.fecha >= hoyStr)
+      .map((p) => p.fecha)
+  )].sort();
+
+  let fechaElegida;
+  if (fechasPendientes.length) {
+    fechaElegida = fechasPendientes[0];
+  } else {
+    const fechasJugadas = [...new Set(conFecha.map((p) => p.fecha))].sort();
+    fechaElegida = fechasJugadas[fechasJugadas.length - 1];
+  }
+
+  return partidos.filter((p) => p.fecha === fechaElegida);
+}
+
+function renderPartidos() {
+  const chips = FAVORITOS.size > 0 ? `
+    <div class="flex gap-2 mb-3">
+      <button onclick="cambiarFiltroPartidos('todos')" class="text-xs font-semibold px-3 py-1.5 rounded-full border ${VISTA_PARTIDOS_FILTRO === 'todos' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Todos</button>
+      <button onclick="cambiarFiltroPartidos('favoritos')" class="text-xs font-semibold px-3 py-1.5 rounded-full border ${VISTA_PARTIDOS_FILTRO === 'favoritos' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">★ Mis equipos</button>
+    </div>
+  ` : '';
+
+  if (VISTA_PARTIDOS_FILTRO === 'favoritos' && FAVORITOS.size > 0) {
+    renderPartidosFavoritos(chips);
+    return;
+  }
+
+  if (CATEGORIA_ACTIVA === 'Todas') {
+    const tip = tipOnboarding('partidos', 'Clickeá un partido para ver el historial de enfrentamientos.');
+    const contenedor = document.getElementById('vista-contenido');
+    const fijados = bloquePartidosFijados();
+    const destacados = bloqueDestacados();
+    const enVivoFijados = calcularPartidosFijados().filter((p) => normalizarEstado(p.estado) === 'vivo').length;
+    contenedor.innerHTML = chips + tip + fijados + (destacados || (fijados ? '' : `<p class="text-center text-muted text-sm py-16">Todavía no hay partidos programados.</p>`));
+    actualizarContadorVivos(enVivoFijados);
+    return;
+  }
+
+  const partidosTemporada = filtrarPorTemporada(PARTIDOS).filter((p) => {
+    const fase = normalizarFase(p.fase);
+    return fase === 'Regular' || esFaseZonaEstricta(fase);
+  });
+  const filtradosPorCategoria = partidosTemporada.filter((p) => p.categoria === CATEGORIA_ACTIVA);
+
+  const jornadasDisponibles = obtenerJornadasDisponibles(filtradosPorCategoria);
+
+  if (!jornadasDisponibles.length) {
+    pintarListaPartidos(filtradosPorCategoria, null, [], filtradosPorCategoria, chips);
+    return;
+  }
+
+  if (JORNADA_ACTIVA === null || !jornadasDisponibles.includes(JORNADA_ACTIVA)) {
+    JORNADA_ACTIVA = elegirJornadaPorDefecto(jornadasDisponibles, filtradosPorCategoria);
+  }
+
+  const partidosDeLaJornada = filtradosPorCategoria.filter((p) => Number(p.fecha_nro) === JORNADA_ACTIVA);
+  pintarListaPartidos(partidosDeLaJornada, JORNADA_ACTIVA, jornadasDisponibles, filtradosPorCategoria, chips);
+}
+
+function pintarListaPartidos(lista, jornadaActiva, jornadasDisponibles, listaCategoriaCompleta, chips) {
+  const enVivo = lista.filter((p) => normalizarEstado(p.estado) === 'vivo').length;
+  actualizarContadorVivos(enVivo);
+
+  const idx = jornadasDisponibles.indexOf(jornadaActiva);
+  const puedeElegir = CATEGORIA_ACTIVA !== 'Todas';
+
+  const centro = (jornadaActiva != null && puedeElegir)
+    ? `<select id="sel-jornada-partidos" class="bg-transparent text-xs font-semibold text-texto text-center appearance-none px-2 cursor-pointer">
+        ${construirOpcionesJornadas(jornadasDisponibles, jornadaActiva, listaCategoriaCompleta)}
+      </select>`
+    : (jornadaActiva != null ? `<span class="text-xs font-semibold text-texto">Fecha ${jornadaActiva}</span>` : '');
+
+  const encabezado =
+    jornadaActiva != null
+      ? `
+    <div class="flex items-center justify-between mb-1">
+      <button onclick="cambiarJornada(-1)" class="p-1.5 text-muted disabled:opacity-25" ${idx <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      ${centro}
+      <button onclick="cambiarJornada(1)" class="p-1.5 text-muted disabled:opacity-25" ${idx >= jornadasDisponibles.length - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>`
+      : '';
+
+  const subChips = jornadaActiva != null ? `
+    <div class="flex gap-2 mb-2 mt-1">
+      <button onclick="cambiarFiltroEstadoPartidos('porjugar')" class="text-[11px] font-semibold px-2.5 py-1 rounded-full border ${PARTIDOS_FILTRO_ESTADO === 'porjugar' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Por jugar</button>
+      <button onclick="cambiarFiltroEstadoPartidos('finalizados')" class="text-[11px] font-semibold px-2.5 py-1 rounded-full border ${PARTIDOS_FILTRO_ESTADO === 'finalizados' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Finalizados</button>
+      <button onclick="cambiarFiltroEstadoPartidos('todos')" class="text-[11px] font-semibold px-2.5 py-1 rounded-full border ${PARTIDOS_FILTRO_ESTADO === 'todos' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Todos</button>
+    </div>
+  ` : '';
+
+  let listaFiltrada = lista;
+  if (PARTIDOS_FILTRO_ESTADO === 'porjugar') {
+    listaFiltrada = lista.filter((p) => normalizarEstado(p.estado) !== 'finalizado');
+  } else if (PARTIDOS_FILTRO_ESTADO === 'finalizados') {
+    listaFiltrada = lista.filter((p) => normalizarEstado(p.estado) === 'finalizado');
+  }
+
+  const tip = tipOnboarding('partidos', 'Clickeá un partido para ver el historial de enfrentamientos.');
+  const contenedor = document.getElementById('vista-contenido');
+
+  const fasesEnJornada = [...new Set(listaFiltrada.map((p) => normalizarFase(p.fase)))];
+  const hayVariasZonas = fasesEnJornada.length > 1 && fasesEnJornada.every((f) => esFaseZonaEstricta(f));
+
+  let cuerpo;
+  if (!listaFiltrada.length) {
+    const mensaje = PARTIDOS_FILTRO_ESTADO === 'porjugar'
+      ? 'No quedan partidos por jugar en esta fecha.'
+      : PARTIDOS_FILTRO_ESTADO === 'finalizados'
+        ? 'Todavía no hay partidos finalizados en esta fecha.'
+        : 'No hay partidos programados para esta fecha.';
+    cuerpo = `<p class="text-center text-muted text-sm py-12">${mensaje}</p>`;
+  } else if (hayVariasZonas) {
+    const ordenZonas = [...fasesEnJornada].sort((a, b) => ordenFaseIndex(a) - ordenFaseIndex(b));
+    cuerpo = ordenZonas
+      .map((fase) => {
+        const partidosZona = listaFiltrada.filter((p) => normalizarFase(p.fase) === fase);
+        if (!partidosZona.length) return '';
+        return `
+          <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2 mt-3">${escaparHtml(fase)}</h3>
+          <div class="space-y-3">${partidosZona.map((p) => filaCompactaPartido(p)).join('')}</div>
+        `;
+      })
+      .join('');
+  } else {
+    cuerpo = `<div class="space-y-3">${listaFiltrada.map((p) => filaCompactaPartido(p)).join('')}</div>`;
+  }
+
+  contenedor.innerHTML = (chips || '') + tip + encabezado + subChips + cuerpo;
+
+  if (jornadaActiva != null && puedeElegir) {
+    document.getElementById('sel-jornada-partidos').addEventListener('change', (e) => {
+      JORNADA_ACTIVA = Number(e.target.value);
+      renderPartidos();
+    });
+  }
+}
+
+function cambiarJornada(delta) {
+  const partidosTemporada = filtrarPorTemporada(PARTIDOS);
+  const filtradosPorCategoria =
+    CATEGORIA_ACTIVA === 'Todas' ? partidosTemporada : partidosTemporada.filter((p) => p.categoria === CATEGORIA_ACTIVA);
+  const jornadas = obtenerJornadasDisponibles(filtradosPorCategoria);
+  const idx = jornadas.indexOf(JORNADA_ACTIVA) + delta;
+  if (idx >= 0 && idx < jornadas.length) {
+    JORNADA_ACTIVA = jornadas[idx];
+    renderPartidos();
+  }
+}
+
+function cambiarFiltroEstadoPartidos(valor) {
+  PARTIDOS_FILTRO_ESTADO = valor;
+  renderPartidos();
+}
+
+function tarjetaPartido(partido, mostrarFecha) {
+  const local = equipoInfo(partido.id_local);
+  const visitante = equipoInfo(partido.id_visitante);
+  const estado = normalizarEstado(partido.estado);
+  const fechaTexto = mostrarFecha ? formatearFechaNumerica(partido.fecha) : '';
+  const pill = pillEstado(estado, fechaTexto);
+  const etiquetaIzquierda = mostrarFecha
+    ? `${etiquetaJornadaPartido(partido)} - ${partido.categoria}`
+    : partido.categoria;
+  const clickable = partido.id_local != null && partido.id_visitante != null;
+
+  return `
+    <article class="bg-surface border border-borde rounded-2xl px-4 py-3.5 ${clickable ? 'cursor-pointer active:opacity-70' : ''}"
+      ${clickable ? `data-h2h-local="${partido.id_local}" data-h2h-visitante="${partido.id_visitante}"` : ''}>
+      <div class="flex items-center justify-between mb-2.5">
+        <span class="font-mono text-[11px] text-muted">${escaparHtml(etiquetaIzquierda)}</span>
+        ${pill}
+      </div>
+      <div class="flex items-center justify-between">
+        ${filaEquipo(local, partido.goles_local, estado)}
+      </div>
+      <div class="h-px punteada-central my-2"></div>
+      <div class="flex items-center justify-between">
+        ${filaEquipo(visitante, partido.goles_visitante, estado)}
+      </div>
+    </article>
+  `;
+}
+
+function filaEquipo(equipo, goles, estado) {
+  const mostrarGol = estado !== 'programado';
+  return `
+    <div class="flex items-center gap-2.5 min-w-0">
+      <img
+        src="${equipo.url_escudo || ''}"
+        onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipo.nombre)}');"
+        class="w-7 h-7 rounded-full object-cover bg-elevado flex-shrink-0"
+        alt="${escaparHtml(equipo.nombre)}"
+      />
+      <span class="font-display text-[15px] tracking-wide truncate">${escaparHtml(equipo.nombre)}</span>
+    </div>
+    <span class="font-mono text-lg font-semibold ${mostrarGol ? 'text-texto' : 'text-muted'} pl-2">
+      ${mostrarGol ? goles ?? 0 : '-'}
+    </span>
+  `;
+}
+
+function filaCompactaPartido(partido) {
+  const local = equipoInfo(partido.id_local);
+  const visitante = equipoInfo(partido.id_visitante);
+  const estado = normalizarEstado(partido.estado);
+  const mostrarGol = estado !== 'programado';
+  const clickable = partido.id_local != null && partido.id_visitante != null;
+
+  return `
+    <article class="bg-surface border border-borde rounded-2xl px-3 py-3 ${clickable ? 'cursor-pointer active:opacity-70' : ''}"
+      ${clickable ? `data-h2h-local="${partido.id_local}" data-h2h-visitante="${partido.id_visitante}"` : ''}>
+      ${estado === 'vivo' ? `<div class="flex items-center gap-1.5 mb-1.5"><span class="w-1.5 h-1.5 rounded-full bg-live punto-vivo"></span><span class="text-[9px] font-bold text-live uppercase">En vivo</span></div>` : ''}
+      <div class="flex items-center gap-2">
+        <img src="${local.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(local.nombre)}');" class="w-6 h-6 rounded-full object-cover bg-elevado flex-shrink-0"/>
+        <span class="text-xs truncate flex-1">${escaparHtml(local.nombre)}</span>
+        <span class="font-mono text-sm font-semibold flex-shrink-0 ${mostrarGol ? 'text-texto' : 'text-muted'}">${mostrarGol ? partido.goles_local ?? 0 : '-'}</span>
+        <span class="text-muted text-xs flex-shrink-0">-</span>
+        <span class="font-mono text-sm font-semibold flex-shrink-0 ${mostrarGol ? 'text-texto' : 'text-muted'}">${mostrarGol ? partido.goles_visitante ?? 0 : '-'}</span>
+        <span class="text-xs truncate flex-1 text-right">${escaparHtml(visitante.nombre)}</span>
+        <img src="${visitante.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(visitante.nombre)}');" class="w-6 h-6 rounded-full object-cover bg-elevado flex-shrink-0"/>
+      </div>
+    </article>
+  `;
+}
+
+function pillEstado(estado, fechaTexto) {
+  const sufijo = fechaTexto ? ` ${fechaTexto}` : '';
+  const variantes = {
+    vivo: `<span class="flex items-center gap-1.5 bg-live/10 text-live text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">
+             <span class="w-1.5 h-1.5 rounded-full bg-live punto-vivo"></span> En vivo${sufijo}
+           </span>`,
+    finalizado: `<span class="bg-elevado text-muted text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">Finalizado${sufijo}</span>`,
+    programado: `<span class="bg-accent/10 text-accent text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">Programado${sufijo}</span>`,
+  };
+  return variantes[estado] || variantes.programado;
+}
+
+function agruparPartidosPorContexto(lista, incluirCategoria) {
+  const ordenada = [...lista].sort((a, b) => {
+    const porFecha = String(a.fecha || '').localeCompare(String(b.fecha || ''));
+    if (porFecha !== 0) return porFecha;
+    return Number(a.fecha_nro) - Number(b.fecha_nro);
+  });
+
+  const grupos = [];
+  ordenada.forEach((p) => {
+    const clave = (incluirCategoria ? p.categoria + '|' : '') + p.fecha_nro + '|' + p.fecha;
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.clave === clave) {
+      ultimo.partidos.push(p);
+    } else {
+      grupos.push({ clave, categoria: p.categoria, fecha_nro: p.fecha_nro, fecha: p.fecha, partidos: [p] });
+    }
+  });
+  return grupos;
+}
+
+function contextoHeaderHtml(grupo) {
+  const etiqueta = etiquetaJornadaPartido(grupo.partidos[0]);
+  const fechaTexto = formatearFechaVisual(grupo.fecha);
+  const hoyStr = new Date().toISOString().slice(0, 10);
+  const esHoy = grupo.fecha === hoyStr;
+
+  return `
+    <div class="flex items-center justify-between mb-1.5 px-0.5 mt-3">
+      <span class="text-[10px] text-muted">${escaparHtml(etiqueta)}</span>
+      ${fechaTexto ? `<span class="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${esHoy ? 'bg-accent text-cancha' : 'bg-elevado text-texto'}">${fechaTexto}</span>` : ''}
+    </div>
+  `;
+}
+
+function renderGruposPartidos(lista) {
+  const grupos = agruparPartidosPorContexto(lista, false);
+  return grupos
+    .map((g) => `
+      ${contextoHeaderHtml(g)}
+      <div class="space-y-2">${g.partidos.map((p) => filaCompactaPartido(p)).join('')}</div>
+    `)
+    .join('');
+}
+
+function renderPaginaAgrupadaPorCategoria(items) {
+  const bloques = [];
+  items.forEach((p) => {
+    const ultimo = bloques[bloques.length - 1];
+    if (ultimo && ultimo.categoria === p.categoria) ultimo.partidos.push(p);
+    else bloques.push({ categoria: p.categoria, partidos: [p] });
+  });
+  return bloques
+    .map((b) => `
+      <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-1.5 mt-3">${escaparHtml(b.categoria)}</h3>
+      ${renderGruposPartidos(b.partidos)}
+    `)
+    .join('');
+}
+
+function paginarConGrupos(lista, pagina, incluirCategoria, idPrefijo) {
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / FAVORITOS_POR_PAGINA));
+  const paginaSegura = Math.min(Math.max(pagina, 0), totalPaginas - 1);
+  const inicio = paginaSegura * FAVORITOS_POR_PAGINA;
+  const items = lista.slice(inicio, inicio + FAVORITOS_POR_PAGINA);
+
+  const cuerpo = incluirCategoria ? renderPaginaAgrupadaPorCategoria(items) : renderGruposPartidos(items);
+
+  const paginacion = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mt-3 mb-2">
+      <button onclick="cambiarPaginaFavoritos('${idPrefijo}', -1)" class="p-1.5 text-muted disabled:opacity-25" ${paginaSegura <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${paginaSegura + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaFavoritos('${idPrefijo}', 1)" class="p-1.5 text-muted disabled:opacity-25" ${paginaSegura >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
+  return cuerpo + paginacion;
+}
+
+/* ============================================================
+ *  VISTA: TABLA DE POSICIONES COMPLETA
+ * ============================================================ */
+function calcularTabla(categoria, fase, temporadaOverride) {
+  const faseObjetivo = fase || 'Regular';
+  const partidosTemporada = temporadaOverride !== undefined
+    ? PARTIDOS.filter((p) => String(p.temporada) === String(temporadaOverride))
+    : filtrarPorTemporada(PARTIDOS);
+
+  const finalizados = partidosTemporada.filter(
+    (p) => p.categoria === categoria &&
+      normalizarEstado(p.estado) === 'finalizado' &&
+      normalizarFase(p.fase) === faseObjetivo
+  );
+
+  const stats = new Map();
+  function obtenerStats(id) {
+    if (!stats.has(id)) stats.set(id, { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+    return stats.get(id);
+  }
+
+  finalizados.forEach((p) => {
+    const local = obtenerStats(String(p.id_local));
+    const visita = obtenerStats(String(p.id_visitante));
+    const gl = Number(p.goles_local) || 0;
+    const gv = Number(p.goles_visitante) || 0;
+
+    local.pj++; visita.pj++;
+    local.gf += gl; local.gc += gv;
+    visita.gf += gv; visita.gc += gl;
+
+    if (gl > gv) { local.pg++; visita.pp++; }
+    else if (gl < gv) { visita.pg++; local.pp++; }
+    else { local.pe++; visita.pe++; }
+  });
+
+  const filas = Array.from(stats.entries()).map(([id, s]) => {
+    const dif = s.gf - s.gc;
+    const pts = s.pg * 3 + s.pe;
+    return { equipo: equipoInfo(id), id, ...s, dif, pts };
+  });
+
+  filas.sort((a, b) => b.pts - a.pts || b.dif - a.dif || b.gf - a.gf);
+  return filas;
+}
+
+let DESTACADOS_EXPANDIDOS = new Set();
+
+function calcularDestacadosPorCategoria() {
+  const categorias = ordenarCategorias([...new Set(filtrarPorTemporada(EQUIPOS).map((e) => e.categoria))]);
+  const resultado = [];
+
+  categorias.forEach((cat) => {
+    const partidosCat = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === cat && normalizarFase(p.fase) === 'Regular');
+    if (!partidosCat.length) return;
+
+    const partidosDelDia = seleccionarPartidosPorFechaMasProxima(partidosCat)
+      .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || Number(a.fecha_nro) - Number(b.fecha_nro));
+
+    if (!partidosDelDia.length) return;
+
+    // "Ver todos" muestra la JORNADA completa (Fecha 19 entera), no solo
+    // los partidos de ese día calendario puntual.
+    const fechasNroDelDia = [...new Set(partidosDelDia.map((p) => Number(p.fecha_nro)))];
+    const todosDeLaJornada = partidosCat
+      .filter((p) => fechasNroDelDia.includes(Number(p.fecha_nro)))
+      .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || Number(a.fecha_nro) - Number(b.fecha_nro));
+
+    const pendientes = partidosDelDia.filter((p) => normalizarEstado(p.estado) !== 'finalizado');
+    const baseParaTop = pendientes.length ? pendientes : partidosDelDia;
+
+    const tabla = calcularTabla(cat, 'Regular');
+    const posicionPorId = new Map();
+    tabla.forEach((f, i) => posicionPorId.set(String(f.id), i + 1));
+
+    const conScore = baseParaTop
+      .filter((p) => posicionPorId.has(String(p.id_local)) && posicionPorId.has(String(p.id_visitante)))
+      .map((p) => ({ partido: p, score: posicionPorId.get(String(p.id_local)) + posicionPorId.get(String(p.id_visitante)) }))
+      .sort((a, b) => a.score - b.score);
+
+    if (!conScore.length) return;
+
+    const topOrdenadosPorFecha = conScore
+      .slice(0, 3)
+      .map((x) => x.partido)
+      .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || Number(a.fecha_nro) - Number(b.fecha_nro));
+
+    resultado.push({
+      categoria: cat,
+      top: topOrdenadosPorFecha,
+      todos: todosDeLaJornada,
+      etiquetaJornada: etiquetaJornadaPartido(partidosDelDia[0]),
+    });
+  });
+
+  return resultado;
+}
+
+function toggleDestacadosCategoria(cat) {
+  if (DESTACADOS_EXPANDIDOS.has(cat)) DESTACADOS_EXPANDIDOS.delete(cat);
+  else DESTACADOS_EXPANDIDOS.add(cat);
+  renderPartidos();
+}
+
+function bloqueDestacados() {
+  const grupos = calcularDestacadosPorCategoria();
+  if (!grupos.length) return '';
+
+  let html = '';
+
+  grupos.forEach((g) => {
+    const expandido = DESTACADOS_EXPANDIDOS.has(g.categoria);
+    const lista = expandido ? g.todos : g.top;
+    const hayMas = g.todos.length > g.top.length;
+
+    html += `
+      <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-1.5 mt-3">${escaparHtml(g.categoria)}</h3>
+      <div class="${expandido ? 'destacados-in' : ''}">${renderGruposPartidos(lista)}</div>
+      ${hayMas ? `<button onclick="toggleDestacadosCategoria('${escaparHtml(g.categoria)}')" class="w-full text-center text-[11px] font-semibold text-accent uppercase tracking-wide mt-2 mb-1 py-1 transition-transform active:scale-95">${expandido ? 'Ver menos' : 'Ver todos los partidos de la ' + escaparHtml(g.etiquetaJornada)}</button>` : ''}
+    `;
+  });
+
+  return html + `<div class="h-2"></div>`;
+}
+
+function calcularPartidosFijados() {
+  return filtrarPorTemporada(PARTIDOS)
+    .filter((p) => normalizarBooleano(p.destacado) && normalizarEstado(p.estado) !== 'finalizado')
+    .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+}
+
+function bloquePartidosFijados() {
+  const fijados = calcularPartidosFijados();
+  if (!fijados.length) return '';
+  return `
+    <h3 class="text-xs font-semibold text-accent uppercase tracking-wide px-1 mb-1.5">📌 Partido importante</h3>
+    ${renderGruposPartidos(fijados)}
+    <div class="h-1"></div>
+  `;
+}
+
+function cambiarFiltroPartidos(valor) {
+  VISTA_PARTIDOS_FILTRO = valor;
+  renderPartidos();
+}
+
+function cambiarFiltroEstadoFavoritos(valor) {
+  FAVORITOS_ESTADO_FILTRO = valor;
+  FAVORITOS_PAGINA = 0;
+  renderPartidos();
+}
+
+function renderPartidosFavoritos(chips) {
+  const contenedor = document.getElementById('vista-contenido');
+
+  let partidosBase = filtrarPorTemporada(PARTIDOS).filter((p) => normalizarFase(p.fase) === 'Regular');
+  if (CATEGORIA_ACTIVA !== 'Todas') {
+    partidosBase = partidosBase.filter((p) => p.categoria === CATEGORIA_ACTIVA);
+  }
+
+  const partidosFavoritos = partidosBase.filter((p) => {
+    const clubLocal = claveClub(equipoInfo(p.id_local));
+    const clubVisitante = claveClub(equipoInfo(p.id_visitante));
+    return FAVORITOS.has(clubLocal) || FAVORITOS.has(clubVisitante);
+  });
+
+  const incluirCategoria = CATEGORIA_ACTIVA === 'Todas';
+
+  const subChips = `
+    <div class="flex gap-2 mb-3">
+      <button onclick="cambiarFiltroEstadoFavoritos('programados')" class="text-[11px] font-semibold px-2.5 py-1 rounded-full border ${FAVORITOS_ESTADO_FILTRO === 'programados' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Programados</button>
+      <button onclick="cambiarFiltroEstadoFavoritos('finalizados')" class="text-[11px] font-semibold px-2.5 py-1 rounded-full border ${FAVORITOS_ESTADO_FILTRO === 'finalizados' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Finalizados</button>
+      <button onclick="cambiarFiltroEstadoFavoritos('todos')" class="text-[11px] font-semibold px-2.5 py-1 rounded-full border ${FAVORITOS_ESTADO_FILTRO === 'todos' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Ver todos</button>
+    </div>
+  `;
+
+  let listaHtml = '';
+  let cantidadEnVivo = 0;
+
+  if (FAVORITOS_ESTADO_FILTRO === 'todos') {
+    const pendientes = partidosFavoritos
+      .filter((p) => normalizarEstado(p.estado) !== 'finalizado')
+      .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+    const finalizados = partidosFavoritos
+      .filter((p) => normalizarEstado(p.estado) === 'finalizado')
+      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+    cantidadEnVivo = pendientes.filter((p) => normalizarEstado(p.estado) === 'vivo').length;
+
+    if (pendientes.length) {
+      listaHtml += `<p class="text-[10px] text-muted uppercase tracking-wide px-1">Próximos</p>${paginarConGrupos(pendientes, FAVORITOS_PAGINA, incluirCategoria, 'proximos')}`;
+    }
+    if (finalizados.length) {
+      listaHtml += `<p class="text-[10px] text-muted uppercase tracking-wide px-1 mt-3">Resultados</p>${paginarConGrupos(finalizados, FAVORITOS_PAGINA, incluirCategoria, 'resultados')}`;
+    }
+    if (!pendientes.length && !finalizados.length) {
+      listaHtml = `<p class="text-center text-muted text-sm py-16">No hay partidos para tus equipos favoritos.</p>`;
+    }
+  } else {
+    const esFinalizados = FAVORITOS_ESTADO_FILTRO === 'finalizados';
+    const lista = partidosFavoritos
+      .filter((p) => (normalizarEstado(p.estado) === 'finalizado') === esFinalizados)
+      .sort((a, b) => esFinalizados
+        ? String(b.fecha || '').localeCompare(String(a.fecha || ''))
+        : String(a.fecha || '').localeCompare(String(b.fecha || '')));
+    cantidadEnVivo = lista.filter((p) => normalizarEstado(p.estado) === 'vivo').length;
+    listaHtml = lista.length
+      ? paginarConGrupos(lista, FAVORITOS_PAGINA, incluirCategoria, 'lista')
+      : `<p class="text-center text-muted text-sm py-16">No hay partidos ${esFinalizados ? 'finalizados' : 'programados'} para tus equipos favoritos.</p>`;
+  }
+
+  actualizarContadorVivos(cantidadEnVivo);
+  contenedor.innerHTML = chips + subChips + listaHtml;
+}
+
+function renderTabla() {
+  const contenedor = document.getElementById('vista-contenido');
+
+  const partidosTemporadaTabla = filtrarPorTemporada(PARTIDOS);
+  const categoriaParaTabla = CATEGORIA_TABLA === 'Todas'
+    ? (ordenarCategorias([...new Set(partidosTemporadaTabla.map((p) => p.categoria).filter(Boolean))])[0] || null)
+    : CATEGORIA_TABLA;
+
+  if (!categoriaParaTabla) {
+    contenedor.innerHTML = `<p class="text-center text-muted text-sm py-16">No hay categorías cargadas.</p>`;
+    return;
+  }
+
+  const aviso = CATEGORIA_TABLA === 'Todas'
+    ? `<p class="text-[11px] text-muted mb-2 px-1">Mostrando ${escaparHtml(categoriaParaTabla)} — elegí otra categoría arriba para cambiar.</p>`
+    : '';
+
+  const tip = tipOnboarding('tabla', 'Clickeá un equipo para ver sus últimos 5 resultados.');
+
+  const partidosCategoria = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === categoriaParaTabla);
+  const fasesPresentes = [...new Set(partidosCategoria.map((p) => normalizarFase(p.fase)))];
+  const fasesOrdenables = fasesPresentes
+    .filter((f) => f !== 'Regular' && !esFaseDesempate(f))
+    .sort((a, b) => ordenFaseIndex(a) - ordenFaseIndex(b));
+
+  const bloques = [{ fase: 'Regular', titulo: fasesPresentes.length > 1 ? 'Fase Regular' : null, esBracket: false }];
+  fasesOrdenables.forEach((f) => {
+    bloques.push(esFaseBracket(f) ? { fase: f, esBracket: true } : { fase: f, titulo: f, esBracket: false });
+  });
+  bloques.forEach((b) => {
+    if (!b.esBracket) {
+      b.filas = calcularTabla(categoriaParaTabla, b.fase);
+      b.ids = new Set(b.filas.map((f) => String(f.id)));
+    }
+  });
+
+  const desempatesDisponibles = partidosCategoria.filter(
+    (p) => esFaseDesempate(normalizarFase(p.fase)) && !/^desempate desc/i.test(normalizarFase(p.fase)) && normalizarEstado(p.estado) === 'finalizado'
+  );
+  const asignaciones = new Map();
+  const sinAsignar = [];
+
+  desempatesDisponibles.forEach((p) => {
+    let mejorIdx = -1, mejorSize = Infinity;
+    bloques.forEach((b, idx) => {
+      if (b.esBracket || !b.filas.length) return;
+      if (b.ids.has(String(p.id_local)) && b.ids.has(String(p.id_visitante)) && b.ids.size < mejorSize) {
+        mejorSize = b.ids.size;
+        mejorIdx = idx;
+      }
+    });
+    if (mejorIdx !== -1) {
+      if (!asignaciones.has(mejorIdx)) asignaciones.set(mejorIdx, []);
+      asignaciones.get(mejorIdx).push(p);
+    } else {
+      sinAsignar.push(p);
+    }
+  });
+
+  // Captions de clasificación — calculadas con datos reales, no hardcodeadas.
+ const zc = bloques.find((b) => !b.esBracket && /zona campeonato/i.test(b.fase));
+  const zp = bloques.find((b) => !b.esBracket && /zona permanencia/i.test(b.fase));
+  const debeDescensoEnRegular = !zc && !zp && tieneDescenso(categoriaParaTabla);
+
+  let captionRegular = '';
+  if (zc && zp) {
+    const nZC = zc.filas.length;
+    const nZP = zp.filas.length;
+    captionRegular = `<p class="text-[10px] text-muted px-1 mt-1.5 mb-1">Posiciones 1 a ${nZC} clasifican a ${escaparHtml(zc.fase)} · Posiciones ${nZC + 1} a ${nZC + nZP} clasifican a ${escaparHtml(zp.fase)}.</p>`;
+  }
+
+  let captionZC = '';
+  if (zc) {
+    const participantes = obtenerParticipantesPlayoff(categoriaParaTabla);
+    if (participantes.length) {
+      const idsZC = new Set(zc.filas.map((f) => String(f.id)));
+      const idsZP = zp ? new Set(zp.filas.map((f) => String(f.id))) : new Set();
+      const desdeZC = participantes.filter((id) => idsZC.has(id)).length;
+      const desdeZP = participantes.filter((id) => idsZP.has(id)).length;
+      if (desdeZC > 0) {
+        let texto = `Posiciones 1 a ${desdeZC} clasifican a Playoff`;
+        if (desdeZP > 0 && zp) texto += `, junto con ${desdeZP === 1 ? 'el 1°' : 'los primeros ' + desdeZP} de ${escaparHtml(zp.fase)}`;
+        texto += '.';
+        captionZC = `<p class="text-[10px] text-muted px-1 mt-1.5 mb-1">${texto}</p>`;
+      }
+    }
+  }
+
+  let huboContenido = false;
+  let html = tip + aviso;
+
+  bloques.forEach((b, idx) => {
+    if (b.esBracket) {
+      html += renderBracketFase(categoriaParaTabla, b.fase);
+      huboContenido = true;
+      return;
+    }
+    if (!b.filas.length) return;
+    huboContenido = true;
+    const umbralRegular = (b.fase === 'Regular' && debeDescensoEnRegular)
+      ? b.filas.length - Math.min(CANTIDAD_DESCENSO_GENERAL, b.filas.length)
+      : undefined;
+    const enCurso = b.fase === 'Regular' && temporadaEnCurso(categoriaParaTabla, TEMPORADA_TABLA);
+    html += bloqueTablaFase(b.titulo, b.filas, b.fase, asignaciones.get(idx) || [], umbralRegular, enCurso);
+
+    if (b.fase === 'Regular' && umbralRegular != null) {
+      const claveOverride = categoriaParaTabla + '|' + TEMPORADA_TABLA;
+      const equiposOverride = DESCENSOS_MANUALES[claveOverride];
+      if (equiposOverride) {
+        html += `<p class="text-[10px] text-live px-1 mb-3">Se jugó un triangular por igualdad de puntos — el descenso restante fue de ${escaparHtml(equiposOverride.join(', '))}.</p>`;
+      }
+    }
+    if (b.fase === 'Regular' && captionRegular) html += captionRegular;
+    if (zc && b.fase === zc.fase && captionZC) html += captionZC;
+  });
+
+  if (sinAsignar.length) {
+    html += `
+      <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mt-4 mb-2">Desempate</h3>
+      <div class="space-y-2 mb-2">${sinAsignar.map(tarjetaDesempate).join('')}</div>
+    `;
+    huboContenido = true;
+  }
+
+  const fasesZonaEstrictas = fasesOrdenables.filter((f) => esFaseZonaEstricta(f));
+  const bloqueGeneral = bloqueTablaGeneral(categoriaParaTabla, fasesZonaEstrictas);
+  if (bloqueGeneral) { html += bloqueGeneral; huboContenido = true; }
+
+  if (!huboContenido) {
+    html += `<p class="text-center text-muted text-sm py-16">Todavía no hay partidos finalizados en esta categoría.</p>`;
+  }
+
+  contenedor.innerHTML = html;
+}
+
+function tablaHtml(filas, umbralDescenso) {
+  return `
+    <div class="bg-surface border border-borde rounded-2xl overflow-hidden mb-2">
+      <table class="w-full text-left table-fixed">
+        <colgroup>
+          <col style="width:5%"><col style="width:26%"><col style="width:7%">
+          <col style="width:7%"><col style="width:7%"><col style="width:7%">
+          <col style="width:8%"><col style="width:8%"><col style="width:10%"><col style="width:15%">
+        </colgroup>
+        <thead>
+          <tr class="text-[9px] uppercase text-muted border-b border-borde">
+            <th class="py-2 pl-1 font-medium">#</th>
+            <th class="py-2 font-medium">Equipo</th>
+            <th class="py-2 text-center font-medium">PJ</th>
+            <th class="py-2 text-center font-medium">PG</th>
+            <th class="py-2 text-center font-medium">PE</th>
+            <th class="py-2 text-center font-medium">PP</th>
+            <th class="py-2 text-center font-medium">GF</th>
+            <th class="py-2 text-center font-medium">GC</th>
+            <th class="py-2 text-center font-medium">DIF</th>
+            <th class="py-2 pr-1 text-right font-medium">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filas.map((f, i) => filaTabla(f, i + 1, umbralDescenso)).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function bloqueTablaFase(titulo, filas, fase, desempates, umbralDescenso, enCurso) {
+  let extra = '';
+  let campeonId = null;
+
+  if (desempates && desempates.length) {
+    const decisivo = desempates[desempates.length - 1];
+    const res = determinarGanadorPartido(decisivo);
+    if (res.idGanador) campeonId = res.idGanador;
+    extra += `
+      <p class="text-[10px] text-muted uppercase tracking-wide px-1 mt-2 mb-1.5">Partido desempate</p>
+      <div class="space-y-2 mb-2">${tarjetaDesempate(decisivo)}</div>
+    `;
+  }
+
+  const coronaCampeon = /copa de plata/i.test(fase);
+  if (coronaCampeon) {
+    if (!campeonId) campeonId = String(filas[0].id);
+    const ganador = equipoInfo(campeonId);
+    extra += `
+      <div class="bg-accent/10 border border-accent/30 rounded-2xl px-4 py-3 mb-2 flex items-center gap-3">
+        <span class="text-2xl">🏆</span>
+        <p class="text-sm font-semibold text-texto">Campeón: ${escaparHtml(ganador.nombre)}</p>
+      </div>
+    `;
+  } else if (campeonId) {
+    const ganador = equipoInfo(campeonId);
+    extra += `
+      <div class="bg-accent/10 border border-accent/30 rounded-2xl px-4 py-3 mb-2 flex items-center gap-3">
+        <span class="text-2xl">🏆</span>
+        <p class="text-sm font-semibold text-texto">Gana el desempate: ${escaparHtml(ganador.nombre)}</p>
+      </div>
+    `;
+  }
+
+  const captionDescenso = umbralDescenso != null
+    ? `<p class="text-[10px] text-live px-1 mt-1.5 mb-1">Últimas ${filas.length - umbralDescenso} posiciones: ${enCurso ? 'en puestos de descenso' : 'descenso'}.</p>`
+    : '';
+
+  return `
+    ${titulo ? `<h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mt-4 mb-2">${escaparHtml(titulo)}</h3>` : ''}
+    ${tablaHtml(filas, umbralDescenso)}
+    ${captionDescenso}
+    ${extra}
+  `;
+}
+
+
+
+function tarjetaDesempate(p) {
+  const local = equipoInfo(p.id_local);
+  const visitante = equipoInfo(p.id_visitante);
+  const res = determinarGanadorPartido(p);
+  const ganadorEsLocal = res.idGanador === String(p.id_local);
+  const ganadorEsVisitante = res.idGanador === String(p.id_visitante);
+
+  return `
+    <div class="bg-surface border border-borde rounded-xl px-3 py-2.5">
+      <div class="flex items-center justify-between text-xs mb-1.5">
+        <div class="flex items-center gap-1.5 min-w-0 ${res.idGanador && !ganadorEsLocal ? 'opacity-60' : ''}">
+          <img src="${local.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(local.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+          <span class="truncate ${ganadorEsLocal ? 'font-semibold text-texto' : 'text-muted'}">${escaparHtml(local.nombre)}</span>
+        </div>
+        <span class="font-mono font-semibold flex-shrink-0 px-2">${Number(p.goles_local) || 0}</span>
+      </div>
+      <div class="flex items-center justify-between text-xs">
+        <div class="flex items-center gap-1.5 min-w-0 ${res.idGanador && !ganadorEsVisitante ? 'opacity-60' : ''}">
+          <img src="${visitante.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(visitante.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+          <span class="truncate ${ganadorEsVisitante ? 'font-semibold text-texto' : 'text-muted'}">${escaparHtml(visitante.nombre)}</span>
+        </div>
+        <span class="font-mono font-semibold flex-shrink-0 px-2">${Number(p.goles_visitante) || 0}</span>
+      </div>
+      ${res.porPenales ? `<p class="text-[9px] text-muted text-center mt-1.5">Definido por penales ${res.penalesLocal}-${res.penalesVisitante}</p>` : ''}
+    </div>
+  `;
+}
+
+/* ============================================================
+ *  CUADRO DE ELIMINACIÓN (Playoff / Copa de Oro / Copa de Plata)
+ * ============================================================ */
+const NOMBRES_RONDA = {
+  octavos: 'Octavos de final',
+  cuartos: 'Cuartos de final',
+  semifinal: 'Semifinal',
+  final: 'Final',
+  otra: 'Otros',
+};
+const ORDEN_RONDAS = ['octavos', 'cuartos', 'semifinal', 'final', 'otra'];
+
+function renderBracketFase(categoria, fase) {
+  const partidosFase = filtrarPorTemporada(PARTIDOS).filter(
+    (p) => p.categoria === categoria && normalizarFase(p.fase) === fase
+  );
+  if (!partidosFase.length) return '';
+
+  const porRonda = new Map();
+  partidosFase.forEach((p) => {
+    const { ronda } = analizarRondaBracket(p.etiqueta_fecha || p.fecha_nro);
+    if (!porRonda.has(ronda)) porRonda.set(ronda, []);
+    porRonda.get(ronda).push(p);
+  });
+
+  const rondas = Array.from(porRonda.keys()).sort((a, b) => ORDEN_RONDAS.indexOf(a) - ORDEN_RONDAS.indexOf(b));
+
+  let html = `<h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mt-5 mb-2">${escaparHtml(fase)}</h3>`;
+  let banner = '';
+
+  rondas.forEach((ronda) => {
+    const cruces = agruparCruces(porRonda.get(ronda));
+    html += `
+      <p class="text-[10px] text-muted uppercase tracking-wide px-1 mb-1.5">${NOMBRES_RONDA[ronda] || ronda}</p>
+      <div class="space-y-2 mb-3">${cruces.map(tarjetaCruce).join('')}</div>
+    `;
+
+if (ronda === 'final' && cruces.length === 1 && cruces[0].definido) {
+      const c = cruces[0];
+      const ganador = c.ganadorA ? c.equipoA : c.equipoB;
+      const idGanador = c.ganadorA ? c.idA : c.idB;
+      const clave = `${categoria}|${TEMPORADA_ACTIVA}|${fase}`;
+      CAMPEONES_TEMPORADA[clave] = { id: idGanador, nombre: ganador.nombre, categoria, temporada: TEMPORADA_ACTIVA, fase };
+
+      const esAscenso = tieneAscenso(categoria);
+      banner = `
+        <div class="bg-accent/10 border border-accent/30 rounded-2xl px-4 py-3 mb-4 flex items-center gap-3">
+          <span class="text-2xl">🏆</span>
+          <p class="text-sm font-semibold text-texto">${esAscenso ? 'Asciende' : 'Campeón'}: ${escaparHtml(ganador.nombre)}</p>
+        </div>
+      `;
+    }
+  });
+
+  return html + banner;
+}
+
+function agruparCruces(partidos) {
+  const cruces = new Map();
+  partidos.forEach((p) => {
+    const clave = [String(p.id_local), String(p.id_visitante)].sort().join('_');
+    if (!cruces.has(clave)) cruces.set(clave, []);
+    cruces.get(clave).push(p);
+  });
+  return Array.from(cruces.entries()).map(([clave, lista]) => {
+    lista.sort((a, b) => Number(a.fecha_nro) - Number(b.fecha_nro));
+    const claveUnica = clave + '__' + lista.map((p) => p.fecha_nro).join('-');
+    CRUCES_INDEX.set(claveUnica, lista);
+    const c = construirCruce(lista);
+    c.claveCruce = claveUnica;
+    return c;
+  });
+}
+
+function construirCruce(partidosDelCruce) {
+  const idsEquipos = [...new Set(partidosDelCruce.flatMap((p) => [String(p.id_local), String(p.id_visitante)]))];
+  const [idA, idB] = idsEquipos;
+  const equipoA = equipoInfo(idA);
+  const equipoB = equipoInfo(idB);
+
+  let golesA = 0, golesB = 0, jugados = 0;
+  partidosDelCruce.forEach((p) => {
+    if (normalizarEstado(p.estado) !== 'finalizado') return;
+    jugados++;
+    const aEsLocal = String(p.id_local) === idA;
+    golesA += aEsLocal ? (Number(p.goles_local) || 0) : (Number(p.goles_visitante) || 0);
+    golesB += aEsLocal ? (Number(p.goles_visitante) || 0) : (Number(p.goles_local) || 0);
+  });
+
+  const totalPartidos = partidosDelCruce.length;
+  const definido = jugados === totalPartidos && totalPartidos > 0;
+
+  let ganadorA = definido && golesA > golesB;
+  let ganadorB = definido && golesB > golesA;
+  let porPenales = false;
+
+  if (definido && golesA === golesB) {
+    const ultimo = partidosDelCruce[partidosDelCruce.length - 1];
+    const res = determinarGanadorPartido(ultimo);
+    if (res.idGanador) {
+      ganadorA = res.idGanador === idA;
+      ganadorB = res.idGanador === idB;
+      porPenales = res.porPenales;
+    }
+  }
+
+  return { equipoA, equipoB, idA, idB, golesA, golesB, jugados, totalPartidos, definido, ganadorA, ganadorB, porPenales, partidos: partidosDelCruce };
+}
+
+function tarjetaCruce(c) {
+  return `
+    <div class="bg-surface border border-borde rounded-xl px-3 py-2.5 cursor-pointer active:opacity-70" data-cruce="${c.claveCruce}">
+      <div class="flex items-center justify-between text-xs mb-1.5">
+        <div class="flex items-center gap-1.5 min-w-0 ${c.ganadorA ? '' : c.definido ? 'opacity-60' : ''}">
+          <img src="${c.equipoA.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(c.equipoA.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+          <span class="truncate ${c.ganadorA ? 'font-semibold text-texto' : 'text-muted'}">${escaparHtml(c.equipoA.nombre)}</span>
+        </div>
+        <span class="font-mono font-semibold flex-shrink-0 px-2">${c.jugados > 0 ? c.golesA : '-'}</span>
+      </div>
+      <div class="flex items-center justify-between text-xs">
+        <div class="flex items-center gap-1.5 min-w-0 ${c.ganadorB ? '' : c.definido ? 'opacity-60' : ''}">
+          <img src="${c.equipoB.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(c.equipoB.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+          <span class="truncate ${c.ganadorB ? 'font-semibold text-texto' : 'text-muted'}">${escaparHtml(c.equipoB.nombre)}</span>
+        </div>
+        <span class="font-mono font-semibold flex-shrink-0 px-2">${c.jugados > 0 ? c.golesB : '-'}</span>
+      </div>
+      ${c.totalPartidos > 1 || c.porPenales ? `<p class="text-[9px] text-muted text-center mt-1.5">${c.jugados}/${c.totalPartidos} partido(s)${c.definido ? ' · global' : ''}${c.porPenales ? ' · por penales' : ''}</p>` : ''}
+    </div>
+  `;
+}
+
+function abrirModalCruceDetalle(clave) {
+  const partidos = CRUCES_INDEX.get(clave);
+  if (!partidos || !partidos.length) return;
+
+  const idsEquipos = [...new Set(partidos.flatMap((p) => [String(p.id_local), String(p.id_visitante)]))];
+  const equipoRef1 = equipoInfo(idsEquipos[0]);
+  const equipoRef2 = equipoInfo(idsEquipos[1]);
+  const c = construirCruce(partidos);
+
+  document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center justify-center gap-4 mb-1">
+      <div class="flex flex-col items-center gap-1.5 w-20">
+        <img src="${equipoRef1.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoRef1.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado"/>
+        <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoRef1.nombre)}</span>
+      </div>
+      
+<div class="flex flex-col items-center flex-shrink-0">
+        ${c.jugados > 0 ? `<span class="font-mono text-lg font-semibold text-texto">${c.golesA} - ${c.golesB}</span>` : ''}
+        ${c.totalPartidos > 1 || c.porPenales ? `<span class="text-[9px] text-muted uppercase mt-0.5">global${c.porPenales ? ' · penales' : ''}</span>` : ''}
+      </div>
+
+      <div class="flex flex-col items-center gap-1.5 w-20">
+        <img src="${equipoRef2.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoRef2.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado"/>
+        <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoRef2.nombre)}</span>
+      </div>
+    </div>
+    <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold mb-2 mt-3 text-center">Serie</h3>
+    <div class="space-y-2">${partidos.map(filaLegCruce).join('')}</div>
+  `;
+  document.getElementById('modal-equipo').classList.remove('hidden');
+}
+
+function formatGolConPenal(goles, penales) {
+  const g = Number(goles) || 0;
+  if (penales !== undefined && penales !== null && penales !== '') {
+    return `${g} (${Number(penales)})`;
+  }
+  return `${g}`;
+}
+
+function filaLegCruce(p) {
+  const local = equipoInfo(p.id_local);
+  const visitante = equipoInfo(p.id_visitante);
+  const tienePenales = p.penales_local !== undefined && p.penales_local !== null && p.penales_local !== '' &&
+    p.penales_visitante !== undefined && p.penales_visitante !== null && p.penales_visitante !== '';
+  const tag = tienePenales ? 'AP' : 'FT';
+
+  return `
+    <div class="flex items-center gap-2 text-xs bg-elevado/40 rounded-xl px-3 py-2">
+      <span class="text-[10px] text-muted font-mono flex-shrink-0 w-12">${formatearFechaCorta(p.fecha)}</span>
+      <img src="${local.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(local.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+      <span class="truncate flex-1">${escaparHtml(local.nombre)}</span>
+      <span class="font-mono font-semibold flex-shrink-0">${formatGolConPenal(p.goles_local, p.penales_local)}</span>
+      <span class="text-muted flex-shrink-0">-</span>
+      <span class="font-mono font-semibold flex-shrink-0">${formatGolConPenal(p.goles_visitante, p.penales_visitante)}</span>
+      <span class="truncate flex-1 text-right">${escaparHtml(visitante.nombre)}</span>
+      <img src="${visitante.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(visitante.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+      <span class="text-[9px] text-muted font-mono flex-shrink-0 w-6 text-right">${tag}</span>
+    </div>
+  `;
+}
+
+function filaTabla(f, posicion, umbralDescenso) {
+  const colorDif = f.dif > 0 ? 'text-accent' : f.dif < 0 ? 'text-live' : 'text-muted';
+  const dataAttr = f.id != null ? `data-equipo-id="${f.id}"` : '';
+  const esDescenso = umbralDescenso != null && posicion > umbralDescenso;
+  const filaClase = esDescenso ? 'bg-live/5' : '';
+  const posicionClase = esDescenso ? 'text-live font-semibold' : 'text-muted';
+
+  return `
+    <tr class="border-b border-borde last:border-0 cursor-pointer active:bg-elevado/60 align-middle ${filaClase}" ${dataAttr}>
+      <td class="py-2 pl-1 font-mono text-[10px] ${posicionClase}">${posicion}</td>
+      <td class="py-2 pr-1">
+        <div class="flex items-center gap-1 min-w-0">
+          <img src="${f.equipo.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(f.equipo.nombre)}');" class="w-4 h-4 rounded-full object-cover bg-elevado flex-shrink-0" alt=""/>
+          <span class="text-[10px] leading-tight break-words capitalize ${esDescenso ? 'text-live' : ''}">${escaparHtml(f.equipo.nombre)}</span>
+        </div>
+      </td>
+      <td class="py-2 text-center font-mono text-[10px] text-muted">${f.pj}</td>
+      <td class="py-2 text-center font-mono text-[10px] text-muted">${f.pg}</td>
+      <td class="py-2 text-center font-mono text-[10px] text-muted">${f.pe}</td>
+      <td class="py-2 text-center font-mono text-[10px] text-muted">${f.pp}</td>
+      <td class="py-2 text-center font-mono text-[10px] text-muted">${f.gf}</td>
+      <td class="py-2 text-center font-mono text-[10px] text-muted">${f.gc}</td>
+      <td class="py-2 text-center font-mono text-[10px] ${colorDif}">${f.dif > 0 ? '+' : ''}${f.dif}</td>
+      <td class="py-2 pr-1 text-right font-mono text-[11px] font-semibold">${f.pts}</td>
+    </tr>
+  `;
+}
+
+/* ============================================================
+ *  VISTA: EQUIPOS — LISTADO ÚNICO POR CLUB
+ * ============================================================ */
+function normalizarClub(nombre) {
+  return String(nombre || '').trim().toLowerCase();
+}
+
+function claveClub(equipo) {
+  return equipo.id_club ? ('club_' + String(equipo.id_club).trim().toLowerCase()) : normalizarClub(equipo.nombre);
+}
+
+function cargarFavoritos() {
+  try {
+    const raw = localStorage.getItem('favoritos_clubes');
+    FAVORITOS = new Set(raw ? JSON.parse(raw) : []);
+  } catch (e) { FAVORITOS = new Set(); }
+}
+
+function guardarFavoritos() {
+  try { localStorage.setItem('favoritos_clubes', JSON.stringify([...FAVORITOS])); } catch (e) {}
+}
+
+function esFavorito(equipo) {
+  return FAVORITOS.has(claveClub(equipo));
+}
+
+function toggleFavorito(equipo) {
+  const clave = claveClub(equipo);
+  if (FAVORITOS.has(clave)) FAVORITOS.delete(clave); else FAVORITOS.add(clave);
+  guardarFavoritos();
+}
+
+function familiaCategoria(categoria) {
+  return String(categoria || '').trim().replace(/\s+[AB]$/i, '').toLowerCase();
+}
+
+function equiposDelClub(equipoReferencia) {
+  const clave = claveClub(equipoReferencia);
+  return EQUIPOS.filter((e) => claveClub(e) === clave);
+}
+
+function obtenerClubsUnicos() {
+  const vistos = new Set();
+  const resultado = [];
+  EQUIPOS.forEach((e) => {
+    const clave = claveClub(e);
+    if (!vistos.has(clave)) {
+      vistos.add(clave);
+      resultado.push(e);
+    }
+  });
+  return resultado;
+}
+
+let FILTRO_EQUIPOS = '';
+
+function renderEquipos() {
+  const contenedor = document.getElementById('vista-contenido');
+  const clubs = obtenerClubsUnicos().filter((c) =>
+    normalizarClub(c.nombre).includes(normalizarClub(FILTRO_EQUIPOS))
+  );
+
+  const tip = tipOnboarding('equipos', 'Buscá tu equipo favorito para ver sus estadísticas y alineaciones.');
+  const medallero = bloqueMedallero();
+
+  contenedor.innerHTML = `
+    ${medallero}
+    <input id="buscador-equipos" type="text" value="${escaparHtml(FILTRO_EQUIPOS)}" placeholder="Buscar equipo…" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2.5 text-sm text-texto placeholder:text-muted mb-1"/>
+    ${tip}
+    ${clubs.map(tarjetaEquipo).join('') || `<p class="text-center text-muted text-sm py-16">No se encontraron equipos.</p>`}
+  `;
+
+  const input = document.getElementById('buscador-equipos');
+  input.addEventListener('input', (e) => {
+    FILTRO_EQUIPOS = e.target.value;
+    renderEquipos();
+    const nuevo = document.getElementById('buscador-equipos');
+    nuevo.focus();
+    nuevo.setSelectionRange(nuevo.value.length, nuevo.value.length);
+  });
+}
+
+function tarjetaEquipo(equipo) {
+  const hermanos = equiposDelClub(equipo);
+  const categoriasUnicas = [...new Set(hermanos.map((h) => h.categoria))];
+  const tieneColores = equipo.color_principal || equipo.color_secundario;
+  const dataAttr = equipo.id_equipo != null ? `data-equipo-perfil="${equipo.id_equipo}"` : '';
+  return `
+    <article class="bg-surface border border-borde rounded-2xl p-4 flex gap-3 cursor-pointer active:bg-elevado/40" ${dataAttr}>
+      <img
+        src="${equipo.url_escudo || ''}"
+        onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipo.nombre)}');"
+        class="w-14 h-14 rounded-xl object-cover bg-elevado flex-shrink-0"
+        alt="${escaparHtml(equipo.nombre)}"
+      />
+      <div class="min-w-0 flex-1">
+        <h3 class="font-display text-base tracking-wide truncate">${escaparHtml(equipo.nombre)}</h3>
+        <div class="flex flex-wrap gap-1 mt-1">
+          ${categoriasUnicas.map((c) => `<span class="bg-elevado text-[9px] font-semibold text-muted uppercase px-2 py-0.5 rounded-full">${escaparHtml(c)}</span>`).join('')}
+        </div>
+        ${equipo.descripcion ? `<p class="text-xs text-muted mt-1.5 leading-relaxed">${escaparHtml(equipo.descripcion)}</p>` : ''}
+        ${tieneColores ? `
+          <div class="flex items-center gap-1.5 mt-2">
+            ${equipo.color_principal ? `<span class="w-4 h-4 rounded-full border border-borde" style="background:${escaparColor(equipo.color_principal)}"></span>` : ''}
+            ${equipo.color_secundario ? `<span class="w-4 h-4 rounded-full border border-borde" style="background:${escaparColor(equipo.color_secundario)}"></span>` : ''}
+          </div>` : ''}
+      </div>
+      ${equipo.url_camiseta ? `<img src="${equipo.url_camiseta}" class="w-12 h-14 object-contain flex-shrink-0" alt="Camiseta ${escaparHtml(equipo.nombre)}"/>` : ''}
+    </article>
+  `;
+}
+
+function escaparColor(valor) {
+  const limpio = String(valor || '').trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(limpio) || /^[a-zA-Z]+$/.test(limpio)) return limpio;
+  return '#1A2230';
+}
+
+/* ============================================================
+ *  MODAL: FORMA DE UN EQUIPO (desde Tabla)
+ * ============================================================ */
+function calcularForma(idEquipo) {
+  const idStr = String(idEquipo);
+
+  return PARTIDOS
+    .filter(
+      (p) =>
+        (String(p.id_local) === idStr || String(p.id_visitante) === idStr) &&
+        normalizarEstado(p.estado) === 'finalizado'
+    )
+    .sort((a, b) => {
+      const porTemporada = String(b.temporada || '').localeCompare(String(a.temporada || ''), undefined, { numeric: true });
+      if (porTemporada !== 0) return porTemporada;
+      return Number(b.fecha_nro) - Number(a.fecha_nro);
+    })
+    .slice(0, 5)
+    .map((p) => {
+      const esLocal = String(p.id_local) === idStr;
+      const propios = esLocal ? Number(p.goles_local) || 0 : Number(p.goles_visitante) || 0;
+      const rivalGoles = esLocal ? Number(p.goles_visitante) || 0 : Number(p.goles_local) || 0;
+      const rival = equipoInfo(esLocal ? p.id_visitante : p.id_local);
+      let resultado = 'E';
+      if (propios > rivalGoles) resultado = 'G';
+      else if (propios < rivalGoles) resultado = 'P';
+      return { resultado, rival, propios, rivalGoles, esLocal, temporada: p.temporada };
+    });
+}
+
+function etiquetaTemporadaForma(forma) {
+  const temporadas = [...new Set(forma.map((f) => f.temporada).filter((t) => t != null && t !== ''))];
+  if (!temporadas.length) return '';
+
+  const temporadaMasReciente = obtenerTemporadasDisponibles(CATEGORIA_ACTIVA)[0];
+  const esSoloActual = temporadas.length === 1 && String(temporadas[0]) === String(temporadaMasReciente);
+  if (esSoloActual) return '';
+
+  temporadas.sort((a, b) => String(b).localeCompare(String(a), undefined, { numeric: true }));
+  return ` <span class="normal-case font-normal text-muted">(${temporadas.map((t) => 'Temporada ' + t).join(' / ')})</span>`;
+}
+
+function abrirModalEquipo(idEquipo) {
+  const equipo = equipoInfo(idEquipo);
+  const forma = calcularForma(idEquipo);
+
+  document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center gap-3 mb-5">
+      <img src="${equipo.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipo.nombre)}');" class="w-14 h-14 rounded-xl object-cover bg-elevado flex-shrink-0"/>
+      <div class="min-w-0">
+        <h2 class="font-display text-xl tracking-wide truncate">${escaparHtml(equipo.nombre)}</h2>
+        <span class="text-[11px] text-muted uppercase tracking-wide">${escaparHtml(equipo.categoria || '')}</span>
+      </div>
+    </div>
+
+    <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold mb-1">Forma · últimos 5${etiquetaTemporadaForma(forma)}</h3>
+    ${
+      forma.length
+        ? `<div class="space-y-2.5 mb-5 mt-2">${forma.map(filaForma).join('')}</div>`
+        : `<p class="text-xs text-muted mb-5">Todavía no hay partidos finalizados para este equipo.</p>`
+    }
+
+    <div class="border-t border-borde pt-4">
+      <p class="text-xs text-muted text-center">Plantel y cuerpo técnico — próximamente</p>
+    </div>
+  `;
+  document.getElementById('modal-equipo').classList.remove('hidden');
+}
+
+function badgeForma(f, chico) {
+  const estilos = { G: 'bg-accent text-cancha', E: 'bg-warning text-cancha', P: 'bg-live text-white' };
+  const tam = chico ? 'w-4 h-4 text-[9px]' : 'w-6 h-6 text-[11px]';
+  return `<span class="${tam} flex items-center justify-center rounded-full font-bold ${estilos[f.resultado]}">${f.resultado}</span>`;
+}
+
+function filaForma(f) {
+  const etiqueta = f.esLocal ? 'L' : 'V';
+  return `
+    <div class="flex items-center justify-between text-xs">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded bg-elevado text-[10px] font-bold text-muted">${etiqueta}</span>
+        <img src="${f.rival.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(f.rival.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+        <span class="truncate">${escaparHtml(f.rival.nombre)}</span>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0 pl-2">
+        <span class="font-mono font-semibold">${f.propios}-${f.rivalGoles}</span>
+        ${badgeForma(f, true)}
+      </div>
+    </div>
+  `;
+}
+
+/* ============================================================
+ *  MODAL: HISTORIAL CARA A CARA (desde Partidos)
+ * ============================================================ */
+
+function calcularHistorialH2H(idLocal, idVisitante) {
+  const clubA = claveClub(equipoInfo(idLocal));
+  const clubB = claveClub(equipoInfo(idVisitante));
+  const familiaRef = familiaCategoria(equipoInfo(idLocal).categoria);
+
+  return PARTIDOS
+    .filter((p) => {
+      if (normalizarEstado(p.estado) !== 'finalizado') return false;
+      if (familiaCategoria(p.categoria) !== familiaRef) return false;
+      const clubLocal = claveClub(equipoInfo(p.id_local));
+      const clubVisitante = claveClub(equipoInfo(p.id_visitante));
+      return (clubLocal === clubA && clubVisitante === clubB) || (clubLocal === clubB && clubVisitante === clubA);
+    })
+    .sort((x, y) => {
+      const porTemporada = String(y.temporada || '').localeCompare(String(x.temporada || ''), undefined, { numeric: true });
+      if (porTemporada !== 0) return porTemporada;
+      return Number(y.fecha_nro) - Number(x.fecha_nro);
+    });
+}
+
+function abrirModalHistorial(idLocal, idVisitante) {
+  const equipoA = equipoInfo(idLocal);
+  const equipoB = equipoInfo(idVisitante);
+  const clubA = claveClub(equipoA);
+  H2H_HISTORIAL_ACTUAL = calcularHistorialH2H(idLocal, idVisitante);
+  H2H_PAGINA = 0;
+
+  let ganoA = 0, ganoB = 0, empates = 0;
+  H2H_HISTORIAL_ACTUAL.forEach((p) => {
+    const aEsLocal = claveClub(equipoInfo(p.id_local)) === clubA;
+    const gA = aEsLocal ? Number(p.goles_local) || 0 : Number(p.goles_visitante) || 0;
+    const gB = aEsLocal ? Number(p.goles_visitante) || 0 : Number(p.goles_local) || 0;
+    if (gA > gB) ganoA++;
+    else if (gA < gB) ganoB++;
+    else empates++;
+  });
+
+  document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center justify-center gap-4 mb-2">
+      <div class="flex flex-col items-center gap-1.5 w-20">
+        <img src="${equipoA.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoA.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado"/>
+        <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoA.nombre)}</span>
+      </div>
+      <span class="font-display text-sm text-muted">VS</span>
+      <div class="flex flex-col items-center gap-1.5 w-20">
+        <img src="${equipoB.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoB.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado"/>
+        <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoB.nombre)}</span>
+      </div>
+    </div>
+    <p class="text-center text-[10px] text-muted uppercase tracking-wide mb-5">${escaparHtml(equipoA.categoria || '')}</p>
+
+    ${H2H_HISTORIAL_ACTUAL.length ? `
+      <div class="flex justify-center gap-6 mb-5 text-center">
+        <div><p class="font-mono text-lg font-semibold text-accent">${ganoA}</p><p class="text-[10px] text-muted uppercase">Ganó ${escaparHtml(equipoA.nombre)}</p></div>
+        <div><p class="font-mono text-lg font-semibold text-warning">${empates}</p><p class="text-[10px] text-muted uppercase">Empates</p></div>
+        <div><p class="font-mono text-lg font-semibold text-live">${ganoB}</p><p class="text-[10px] text-muted uppercase">Ganó ${escaparHtml(equipoB.nombre)}</p></div>
+      </div>
+      <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold mb-2">Historial de enfrentamientos</h3>
+      <div id="h2h-lista"></div>
+      <div id="h2h-paginacion" class="flex items-center justify-between mt-3"></div>
+    ` : `<p class="text-xs text-muted text-center py-6">Todavía no se enfrentaron en esta categoría.</p>`}
+  `;
+  document.getElementById('modal-equipo').classList.remove('hidden');
+
+  if (H2H_HISTORIAL_ACTUAL.length) renderPaginaHistorial();
+}
+
+function paginarHtml(lista, pagina, renderItem, idPrefijo) {
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / FAVORITOS_POR_PAGINA));
+  const paginaSegura = Math.min(Math.max(pagina, 0), totalPaginas - 1);
+  const inicio = paginaSegura * FAVORITOS_POR_PAGINA;
+  const items = lista.slice(inicio, inicio + FAVORITOS_POR_PAGINA);
+
+  const paginacion = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mt-3 mb-2">
+      <button onclick="cambiarPaginaFavoritos('${idPrefijo}', -1)" class="p-1.5 text-muted disabled:opacity-25" ${paginaSegura <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${paginaSegura + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaFavoritos('${idPrefijo}', 1)" class="p-1.5 text-muted disabled:opacity-25" ${paginaSegura >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
+  return `<div class="space-y-3">${items.map(renderItem).join('')}</div>${paginacion}`;
+}
+
+function cambiarPaginaFavoritos(idPrefijo, delta) {
+  FAVORITOS_PAGINA += delta;
+  renderPartidos();
+}
+
+function renderPaginaHistorial() {
+  const totalPaginas = Math.max(1, Math.ceil(H2H_HISTORIAL_ACTUAL.length / H2H_POR_PAGINA));
+  if (H2H_PAGINA >= totalPaginas) H2H_PAGINA = totalPaginas - 1;
+  if (H2H_PAGINA < 0) H2H_PAGINA = 0;
+
+  const inicio = H2H_PAGINA * H2H_POR_PAGINA;
+  const pagina = H2H_HISTORIAL_ACTUAL.slice(inicio, inicio + H2H_POR_PAGINA);
+
+  document.getElementById('h2h-lista').innerHTML = `<div class="space-y-2">${pagina.map(filaHistorialH2H).join('')}</div>`;
+
+  const paginacion = document.getElementById('h2h-paginacion');
+  if (totalPaginas <= 1) {
+    paginacion.innerHTML = '';
+    return;
+  }
+
+  function paginarHtml(lista, pagina, renderItem, idPrefijo) {
+  const totalPaginas = Math.max(1, Math.ceil(lista.length / FAVORITOS_POR_PAGINA));
+  const paginaSegura = Math.min(Math.max(pagina, 0), totalPaginas - 1);
+  const inicio = paginaSegura * FAVORITOS_POR_PAGINA;
+  const items = lista.slice(inicio, inicio + FAVORITOS_POR_PAGINA);
+
+  const paginacion = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mt-3 mb-2">
+      <button onclick="cambiarPaginaFavoritos('${idPrefijo}', -1)" class="p-1.5 text-muted disabled:opacity-25" ${paginaSegura <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${paginaSegura + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaFavoritos('${idPrefijo}', 1)" class="p-1.5 text-muted disabled:opacity-25" ${paginaSegura >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
+  return `<div class="space-y-3">${items.map(renderItem).join('')}</div>${paginacion}`;
+}
+
+function cambiarPaginaFavoritos(idPrefijo, delta) {
+  FAVORITOS_PAGINA += delta;
+  renderPartidos();
+}
+
+  paginacion.innerHTML = `
+    <button onclick="cambiarPaginaHistorial(-1)" class="p-1.5 text-muted disabled:opacity-25" ${H2H_PAGINA <= 0 ? 'disabled' : ''}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <span class="text-[10px] text-muted uppercase">Página ${H2H_PAGINA + 1} de ${totalPaginas}</span>
+    <button onclick="cambiarPaginaHistorial(1)" class="p-1.5 text-muted disabled:opacity-25" ${H2H_PAGINA >= totalPaginas - 1 ? 'disabled' : ''}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+  `;
+}
+
+function cambiarPaginaHistorial(delta) {
+  H2H_PAGINA += delta;
+  renderPaginaHistorial();
+}
+
+function formatearFechaCorta(fechaIso) {
+  if (!fechaIso) return '-';
+  const d = new Date(fechaIso + 'T00:00:00');
+  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }).replace('.', '');
+}
+
+function formatearFechaNumerica(fechaIso) {
+  if (!fechaIso) return '';
+  const d = new Date(fechaIso + 'T00:00:00');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
+}
+
+function formatearFechaVisual(fechaIso) {
+  if (!fechaIso) return '';
+  const hoyStr = new Date().toISOString().slice(0, 10);
+  const mananaStr = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  if (fechaIso === hoyStr) return 'Hoy';
+  if (fechaIso === mananaStr) return 'Mañana';
+
+  const d = new Date(fechaIso + 'T00:00:00');
+  const dia = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
+  const diaCapitalizado = dia.charAt(0).toUpperCase() + dia.slice(1);
+  return `${diaCapitalizado} ${d.getDate()}/${d.getMonth() + 1}`;
+}
+
+function filaHistorialH2H(partido) {
+  const local = equipoInfo(partido.id_local);
+  const visitante = equipoInfo(partido.id_visitante);
+  const anioCorto = partido.temporada ? `'${String(partido.temporada).slice(-2)}` : '';
+  return `
+    <div class="flex items-center justify-between text-xs bg-elevado/40 rounded-xl px-3 py-2 gap-2">
+      <span class="text-[10px] text-muted font-mono flex-shrink-0 w-16 truncate">${escaparHtml(etiquetaJornadaPartido(partido))}</span>
+      <span class="truncate flex-1 text-right">${escaparHtml(local.nombre)}</span>
+      <span class="font-mono font-semibold flex-shrink-0 px-1">${Number(partido.goles_local) || 0}-${Number(partido.goles_visitante) || 0}</span>
+      <span class="truncate flex-1">${escaparHtml(visitante.nombre)}</span>
+      <span class="text-[10px] text-muted font-mono flex-shrink-0 w-16 text-right">${formatearFechaCorta(partido.fecha)} ${anioCorto}</span>
+    </div>
+  `;
+}
+
+/* ============================================================
+ *  MODAL: PERFIL DE EQUIPO (desde Equipos)
+ * ============================================================ */
+function calcularDashboardEquipoMultiple(ids, temporada) {
+  const idsStr = ids.map(String);
+  const jugados = PARTIDOS.filter(
+    (p) => (idsStr.includes(String(p.id_local)) || idsStr.includes(String(p.id_visitante))) &&
+      normalizarEstado(p.estado) === 'finalizado' &&
+      (!temporada || String(p.temporada) === String(temporada))
+  );
+
+  let gf = 0, gc = 0, pg = 0, pe = 0, pp = 0;
+  jugados.forEach((p) => {
+    const esLocal = idsStr.includes(String(p.id_local));
+    const propios = esLocal ? Number(p.goles_local) || 0 : Number(p.goles_visitante) || 0;
+    const rival = esLocal ? Number(p.goles_visitante) || 0 : Number(p.goles_local) || 0;
+    gf += propios; gc += rival;
+    if (propios > rival) pg++;
+    else if (propios < rival) pp++;
+    else pe++;
+  });
+
+  const pj = jugados.length;
+  return { pj, pg, pe, pp, gf, gc, promedioGF: pj ? gf / pj : 0, promedioGC: pj ? gc / pj : 0 };
+}
+
+function abrirModalPerfilEquipo(idEquipo) {
+  const equipo = equipoInfo(idEquipo);
+  CLUB_PERFIL_ACTUAL = equipo;
+  PERFIL_FILTRO_CATEGORIA = null;
+  PERFIL_FILTRO_TEMPORADA = null;
+  renderModalPerfilEquipo();
+  document.getElementById('modal-equipo').classList.remove('hidden');
+}
+
+function toggleFavoritoClick() {
+  toggleFavorito(CLUB_PERFIL_ACTUAL);
+  renderModalPerfilEquipo();
+}
+
+
+function renderModalPerfilEquipo() {
+  const hermanos = equiposDelClub(CLUB_PERFIL_ACTUAL);
+  const categoriasDisponibles = [...new Set(hermanos.map((h) => h.categoria))];
+
+  // ids según el filtro de categoría (todas si no hay filtro elegido)
+  const filaPorCategoria = hermanos.filter((h) => !PERFIL_FILTRO_CATEGORIA || h.categoria === PERFIL_FILTRO_CATEGORIA);
+  const idsPorCategoria = filaPorCategoria.map((h) => String(h.id_equipo));
+
+  // Temporadas REALMENTE jugadas por esos ids, según los partidos —
+  // no según la hoja "equipos" — así funciona aunque el club haya
+  // mantenido el mismo id_equipo en todos los años.
+  const temporadasDisponibles = [...new Set(
+    PARTIDOS
+      .filter((p) => idsPorCategoria.includes(String(p.id_local)) || idsPorCategoria.includes(String(p.id_visitante)))
+      .map((p) => p.temporada)
+      .filter((t) => t != null && t !== '')
+  )].sort((a, b) => String(b).localeCompare(String(a), undefined, { numeric: true }));
+
+  const referencia = filaPorCategoria[0] || hermanos[0];
+  const combinando = idsPorCategoria.length > 1;
+
+  const d = calcularDashboardEquipoMultiple(idsPorCategoria, PERFIL_FILTRO_TEMPORADA);
+
+const plantillaCruda = idsPorCategoria.flatMap((id) => {
+    const fila = filaPorCategoria.find((h) => String(h.id_equipo) === id);
+    const jugadoresDelEquipo = (JUGADORES_POR_EQUIPO.get(id) || [])
+      .filter((j) => !PERFIL_FILTRO_TEMPORADA || String(j.temporada) === String(PERFIL_FILTRO_TEMPORADA));
+    return jugadoresDelEquipo.map((j) => ({ ...j, _categoria: fila ? fila.categoria : '' }));
+  });
+
+  const plantilla = PERFIL_FILTRO_TEMPORADA ? plantillaCruda : agruparJugadoresPorPersona(plantillaCruda);
+
+  const base = d.pj || 1;
+  const pctG = Math.round((d.pg / base) * 100);
+  const pctE = Math.round((d.pe / base) * 100);
+  const pctP = Math.round((d.pp / base) * 100);
+
+  const filtros = (categoriasDisponibles.length > 1 || temporadasDisponibles.length > 1)
+    ? `<div class="grid grid-cols-2 gap-2 mb-4">
+        ${categoriasDisponibles.length > 1 ? `
+          <select id="sel-perfil-categoria" class="bg-elevado border border-borde rounded-xl px-2 py-2 text-xs text-texto">
+            <option value="">Todas las categorías</option>
+            ${categoriasDisponibles.map((c) => `<option value="${c}" ${c === PERFIL_FILTRO_CATEGORIA ? 'selected' : ''}>${escaparHtml(c)}</option>`).join('')}
+          </select>
+        ` : ''}
+        ${temporadasDisponibles.length > 1 ? `
+          <select id="sel-perfil-temporada" class="bg-elevado border border-borde rounded-xl px-2 py-2 text-xs text-texto">
+            <option value="">Todas las temporadas</option>
+            ${temporadasDisponibles.map((t) => `<option value="${t}" ${String(t) === PERFIL_FILTRO_TEMPORADA ? 'selected' : ''}>Temporada ${t}</option>`).join('')}
+          </select>
+        ` : ''}
+      </div>`
+    : '';
+
+  const etiquetaCategoria = `${referencia.categoria || ''}${PERFIL_FILTRO_TEMPORADA ? ' · Temporada ' + PERFIL_FILTRO_TEMPORADA : ''}`;
+
+document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center gap-3 mb-4">
+      <img src="${referencia.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(referencia.nombre)}');" class="w-14 h-14 rounded-xl object-cover bg-elevado flex-shrink-0"/>
+      <div class="min-w-0 flex-1">
+        <h2 class="font-display text-xl tracking-wide truncate">${escaparHtml(referencia.nombre)}</h2>
+        <span class="text-[11px] text-muted uppercase tracking-wide">${escaparHtml(etiquetaCategoria)}</span>
+      </div>
+      <button onclick="toggleFavoritoClick()" title="Marcar favorito" class="text-2xl flex-shrink-0 leading-none">${esFavorito(CLUB_PERFIL_ACTUAL) ? '⭐' : '☆'}</button>
+    </div>
+
+    ${filtros}
+
+    <div class="grid grid-cols-2 gap-2.5 mb-4">
+      <div class="bg-elevado rounded-xl p-3">
+        <p class="font-mono text-2xl font-semibold text-accent">${d.promedioGF.toFixed(1)}</p>
+        <p class="text-[10px] text-muted uppercase tracking-wide mt-0.5">Goles a favor / partido</p>
+      </div>
+      <div class="bg-elevado rounded-xl p-3">
+        <p class="font-mono text-2xl font-semibold text-live">${d.promedioGC.toFixed(1)}</p>
+        <p class="text-[10px] text-muted uppercase tracking-wide mt-0.5">Goles en contra / partido</p>
+      </div>
+    </div>
+
+    <div class="bg-elevado rounded-xl p-3 mb-5">
+      <div class="flex justify-between text-[10px] text-muted uppercase mb-1.5">
+        <span>PJ ${d.pj}</span><span>GF ${d.gf}</span><span>GC ${d.gc}</span>
+      </div>
+      <div class="h-2.5 rounded-full overflow-hidden flex w-full bg-cancha">
+        <div style="width:${pctG}%" class="bg-accent"></div>
+        <div style="width:${pctE}%" class="bg-warning"></div>
+        <div style="width:${pctP}%" class="bg-live"></div>
+      </div>
+      <div class="flex justify-between text-[10px] mt-1.5">
+        <span class="text-accent font-semibold">${d.pg}G</span>
+        <span class="text-warning font-semibold">${d.pe}E</span>
+        <span class="text-live font-semibold">${d.pp}P</span>
+      </div>
+    </div>
+
+    ${bloquePalmaresClub(referencia)}
+
+    <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold mb-2">Plantel</h3>
+    ${plantilla.length
+      ? `<div class="space-y-2">${plantilla.map((j) => filaJugador(j, combinando)).join('')}</div>`
+      : `<p class="text-xs text-muted">Plantel — próximamente</p>`}
+  `;
+
+  if (categoriasDisponibles.length > 1) {
+    document.getElementById('sel-perfil-categoria').addEventListener('change', (e) => {
+      PERFIL_FILTRO_CATEGORIA = e.target.value || null;
+      renderModalPerfilEquipo();
+    });
+  }
+  if (temporadasDisponibles.length > 1) {
+    document.getElementById('sel-perfil-temporada').addEventListener('change', (e) => {
+      PERFIL_FILTRO_TEMPORADA = e.target.value || null;
+      renderModalPerfilEquipo();
+    });
+  }
+}
+
+function agruparJugadoresPorPersona(lista) {
+  const grupos = new Map();
+
+  lista.forEach((j) => {
+    const nombreCompleto = [j.Nombre, j.Apellido].filter(Boolean).join(' ').trim().toLowerCase();
+    const clave = (j.id_jugador != null && String(j.id_jugador).trim() !== '')
+      ? 'id_' + String(j.id_jugador).trim()
+      : 'nombre_' + nombreCompleto;
+
+    if (!grupos.has(clave)) {
+      grupos.set(clave, { ...j, goles: 0, amarillas: 0, rojas: 0 });
+    }
+    const g = grupos.get(clave);
+    g.goles = (Number(g.goles) || 0) + (Number(j.goles) || 0);
+    g.amarillas = (Number(g.amarillas) || 0) + (Number(j.amarillas) || 0);
+    g.rojas = (Number(g.rojas) || 0) + (Number(j.rojas) || 0);
+
+    // La foto/nombre que se muestra es la de la fila más reciente
+    if (String(j.temporada || '').localeCompare(String(g._temporadaReferencia || ''), undefined, { numeric: true }) >= 0) {
+      g.url_foto = j.url_foto;
+      g.Nombre = j.Nombre;
+      g.Apellido = j.Apellido;
+      g._temporadaReferencia = j.temporada;
+    }
+  });
+
+  return Array.from(grupos.values());
+}
+
+function filaJugador(j, mostrarCategoria) {
+  const nombreCompleto = [j.Nombre, j.Apellido].filter(Boolean).join(' ') || 'Jugador';
+  const goles = Number(j.goles) || 0;
+  const amarillas = Number(j.amarillas) || 0;
+  const rojas = Number(j.rojas) || 0;
+
+  return `
+    <div class="flex items-center gap-2.5 text-xs bg-elevado/40 rounded-xl px-3 py-2">
+      <img src="${j.url_foto || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(nombreCompleto)}');" class="w-7 h-7 rounded-full object-cover bg-elevado flex-shrink-0"/>
+      <span class="truncate flex-1">${escaparHtml(nombreCompleto)}</span>
+      ${mostrarCategoria && j._categoria ? `<span class="text-[9px] text-accent uppercase flex-shrink-0">${escaparHtml(j._categoria)}</span>` : ''}
+      <div class="flex items-center gap-2 flex-shrink-0 text-[10px] font-mono">
+        ${goles ? `<span class="text-accent font-semibold">⚽${goles}</span>` : ''}
+        ${amarillas ? `<span class="text-warning">🟨${amarillas}</span>` : ''}
+        ${rojas ? `<span class="text-live">🟥${rojas}</span>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function cerrarModalEquipo() {
+  document.getElementById('modal-equipo').classList.add('hidden');
+  document.getElementById('btn-volver-modal').classList.add('hidden');
+}
+
+/* ============================================================
+ *  FEEDBACK / REPORTE DE BUGS
+ * ============================================================ */
+document.getElementById('btn-feedback').addEventListener('click', () => {
+  document.getElementById('modal-feedback').classList.remove('hidden');
+});
+
+function cerrarModalFeedback() {
+  document.getElementById('modal-feedback').classList.add('hidden');
+  document.getElementById('feedback-estado-envio').textContent = '';
+}
+
+document.getElementById('btn-actualizar').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-actualizar');
+  btn.classList.add('animate-spin');
+  EVITAR_BLUR_ACTUALIZACION = true;
+  await cargarDatos();
+  EVITAR_BLUR_ACTUALIZACION = false;
+  btn.classList.remove('animate-spin');
+});
+
+async function enviarFeedback() {
+  const texto = document.getElementById('feedback-texto').value.trim();
+  const estadoEl = document.getElementById('feedback-estado-envio');
+
+  if (!texto) {
+    estadoEl.textContent = 'Contanos qué pasó antes de enviar.';
+    return;
+  }
+
+  estadoEl.textContent = 'Enviando…';
+  try {
+    const res = await fetch(FORMSPREE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        mensaje: texto,
+        vista: VISTA_ACTIVA,
+        categoria: CATEGORIA_ACTIVA,
+        jornada: JORNADA_ACTIVA,
+        url: window.location.href,
+        fecha: new Date().toISOString(),
+      }),
+    });
+    if (!res.ok) throw new Error('No se pudo enviar');
+
+    estadoEl.textContent = '¡Gracias! Ya lo recibimos.';
+    document.getElementById('feedback-texto').value = '';
+    setTimeout(cerrarModalFeedback, 1500);
+  } catch (err) {
+    estadoEl.textContent = 'No se pudo enviar, probá de nuevo en un rato.';
+  }
+}
+
+/* ============================================================
+ *  ADMIN — PANEL DE CARGA PROTEGIDO POR PIN
+ *  Sin botón visible: se abre manteniendo presionado 2s el
+ *  título "FUTSAL LIVE" del header.
+ * ============================================================ */
+(function configurarGestoOcultoAdmin() {
+  const titulo = document.getElementById('app-title');
+  let temporizador = null;
+
+  const iniciar = () => {
+    temporizador = setTimeout(abrirModalAdmin, 2500);
+  };
+  const cancelar = () => {
+    if (temporizador) clearTimeout(temporizador);
+  };
+
+  titulo.addEventListener('touchstart', iniciar, { passive: true });
+  titulo.addEventListener('touchend', cancelar);
+  titulo.addEventListener('touchmove', cancelar);
+  titulo.addEventListener('mousedown', iniciar);
+  titulo.addEventListener('mouseup', cancelar);
+  titulo.addEventListener('mouseleave', cancelar);
+})();
+
+function abrirModalAdmin() {
+  ADMIN_PIN_ACTUAL = null;
+  renderAdminPin();
+  document.getElementById('modal-admin').classList.remove('hidden');
+}
+
+function cerrarModalAdmin() {
+  document.getElementById('modal-admin').classList.add('hidden');
+}
+
+function renderAdminPin() {
+  document.getElementById('admin-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-3">Panel de carga</h2>
+    <label class="text-[11px] uppercase text-muted font-semibold">PIN</label>
+    <input id="admin-pin-input" type="password" inputmode="numeric" placeholder="••••" class="w-full mt-1.5 bg-elevado border border-borde rounded-xl p-3 text-center text-lg tracking-widest text-texto"/>
+    <button onclick="validarPinAdmin()" class="w-full mt-3 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Ingresar</button>
+    <p id="admin-pin-estado" class="text-center text-xs text-live mt-2 min-h-[16px]"></p>
+  `;
+  document.getElementById('admin-pin-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') validarPinAdmin();
+  });
+}
+
+function validarPinAdmin() {
+  const pin = document.getElementById('admin-pin-input').value;
+  const estadoEl = document.getElementById('admin-pin-estado');
+  if (!pin) { estadoEl.textContent = 'Ingresá el PIN.'; return; }
+
+  estadoEl.textContent = 'Verificando…';
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ accion: 'comprobarPin', pin: pin }),
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.ok && data.resultado) {
+        ADMIN_PIN_ACTUAL = pin;
+        renderAdminPanelCategorias();
+      } else {
+        estadoEl.textContent = 'PIN incorrecto.';
+      }
+    })
+    .catch((err) => {
+      estadoEl.textContent = 'Error al verificar: ' + err.message;
+    });
+}
+
+function obtenerPendientesAdmin() {
+  return PARTIDOS.filter((p) => normalizarEstado(p.estado) !== 'finalizado');
+}
+
+function renderAdminPanelCategorias() {
+  const pendientes = obtenerPendientesAdmin();
+  const categorias = Array.from(new Set(pendientes.map((p) => p.categoria))).sort();
+
+  if (!ADMIN_CATEGORIA || !categorias.includes(ADMIN_CATEGORIA)) {
+    ADMIN_CATEGORIA = categorias[0] || null;
+  }
+
+  document.getElementById('admin-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-display text-lg tracking-wide">Panel de carga</h2>
+      <button onclick="cerrarSesionAdmin()" class="text-[10px] text-muted uppercase font-semibold">Salir</button>
+    </div>
+    ${categorias.length ? `
+      <label class="text-[11px] uppercase text-muted font-semibold">Categoría</label>
+      <select id="admin-sel-categoria" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"></select>
+      <label class="text-[11px] uppercase text-muted font-semibold">Fecha</label>
+      <select id="admin-sel-jornada" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"></select>
+      <div id="admin-lista-partidos" class="space-y-2"></div>
+      <button onclick="guardarDesdeAdmin()" class="w-full mt-4 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Guardar todos los cargados</button>
+      <p id="admin-estado" class="text-center text-xs mt-2 min-h-[16px] text-muted"></p>
+    ` : `<p class="text-xs text-muted text-center py-8">🎉 No quedan partidos pendientes de cargar.</p>`}
+  `;
+
+  if (!categorias.length) return;
+
+  const selCat = document.getElementById('admin-sel-categoria');
+  selCat.innerHTML = categorias.map((c) => `<option value="${c}" ${c === ADMIN_CATEGORIA ? 'selected' : ''}>${c}</option>`).join('');
+  selCat.onchange = () => {
+    ADMIN_CATEGORIA = selCat.value;
+    ADMIN_JORNADA = null;
+    renderAdminJornadas();
+  };
+
+  renderAdminJornadas();
+}
+
+function renderAdminJornadas() {
+  const pendientes = obtenerPendientesAdmin().filter((p) => p.categoria === ADMIN_CATEGORIA);
+  const jornadas = Array.from(new Set(pendientes.map((p) => Number(p.fecha_nro)))).sort((a, b) => a - b);
+
+  if (ADMIN_JORNADA === null || !jornadas.includes(ADMIN_JORNADA)) {
+    ADMIN_JORNADA = jornadas.length ? jornadas[0] : null;
+  }
+
+  const sel = document.getElementById('admin-sel-jornada');
+  sel.innerHTML = jornadas.map((j) => `<option value="${j}" ${j === ADMIN_JORNADA ? 'selected' : ''}>Fecha ${j}</option>`).join('');
+  sel.onchange = () => {
+    ADMIN_JORNADA = Number(sel.value);
+    renderAdminListaPartidos();
+  };
+
+  renderAdminListaPartidos();
+}
+
+function renderAdminListaPartidos() {
+  const lista = obtenerPendientesAdmin().filter(
+    (p) => p.categoria === ADMIN_CATEGORIA && Number(p.fecha_nro) === ADMIN_JORNADA
+  );
+  const cont = document.getElementById('admin-lista-partidos');
+
+  cont.innerHTML = lista
+    .map((p, i) => {
+      const local = equipoInfo(p.id_local);
+      const visitante = equipoInfo(p.id_visitante);
+      return `
+        <div class="bg-elevado rounded-xl p-3" data-idx="${i}">
+          <div class="flex items-center justify-between text-xs mb-2 gap-2">
+            <span class="truncate flex-1">${escaparHtml(local.nombre)}</span>
+            <span class="truncate flex-1 text-right">${escaparHtml(visitante.nombre)}</span>
+          </div>
+          <div class="flex items-center justify-center gap-2">
+            <input type="number" min="0" class="admin-input-local w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" placeholder="-"/>
+            <span class="text-muted text-sm">—</span>
+            <input type="number" min="0" class="admin-input-visitante w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" placeholder="-"/>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  cont.dataset.partidos = JSON.stringify(lista);
+}
+
+function guardarDesdeAdmin() {
+  const cont = document.getElementById('admin-lista-partidos');
+  const lista = JSON.parse(cont.dataset.partidos || '[]');
+  const filas = cont.querySelectorAll('[data-idx]');
+  const estadoEl = document.getElementById('admin-estado');
+
+  const paraGuardar = [];
+  filas.forEach((fila) => {
+    const idx = Number(fila.dataset.idx);
+    const p = lista[idx];
+    const gl = fila.querySelector('.admin-input-local').value;
+    const gv = fila.querySelector('.admin-input-visitante').value;
+    if (gl !== '' && gv !== '') {
+      paraGuardar.push({
+        categoria: p.categoria,
+        fecha_nro: p.fecha_nro,
+        id_local: p.id_local,
+        id_visitante: p.id_visitante,
+        goles_local: gl,
+        goles_visitante: gv,
+      });
+    }
+  });
+
+  if (!paraGuardar.length) {
+    estadoEl.textContent = 'Completá al menos un marcador.';
+    estadoEl.className = 'text-center text-xs mt-2 text-live';
+    return;
+  }
+
+  estadoEl.textContent = `Guardando ${paraGuardar.length} partido(s)…`;
+  estadoEl.className = 'text-center text-xs mt-2 text-muted';
+
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ accion: 'guardarResultados', pin: ADMIN_PIN_ACTUAL, lista: paraGuardar }),
+  })
+    .then((r) => r.json())
+    .then(async (data) => {
+      if (!data.ok) throw new Error(data.error);
+      const res = data.resultado;
+      let msg = `✓ Guardados ${res.guardados} de ${paraGuardar.length}.`;
+      if (res.errores.length) msg += ' Algunos fallaron, revisá.';
+      estadoEl.textContent = msg;
+      estadoEl.className = 'text-center text-xs mt-2 ' + (res.errores.length ? 'text-live' : 'text-accent');
+
+      await cargarDatos();
+      renderAdminPanelCategorias();
+    })
+    .catch((err) => {
+      estadoEl.textContent = 'Error: ' + err.message;
+      estadoEl.className = 'text-center text-xs mt-2 text-live';
+    });
+}
+
+function cerrarSesionAdmin() {
+  ADMIN_PIN_ACTUAL = null;
+  renderAdminPin();
+}
+
+const CANTIDAD_DESCENSO_GENERAL = 2;
+
+function esFaseZonaEstricta(fase) {
+  return /zona/i.test(fase); // a diferencia de esFaseZona, NO incluye Copa de Plata
+}
+
+function calcularTablaMultiFase(categoria, fases, temporadaOverride) {
+  const partidosTemporada = temporadaOverride !== undefined
+    ? PARTIDOS.filter((p) => String(p.temporada) === String(temporadaOverride))
+    : filtrarPorTemporada(PARTIDOS);
+  const finalizados = partidosTemporada.filter(
+    (p) => p.categoria === categoria &&
+      normalizarEstado(p.estado) === 'finalizado' &&
+      fases.includes(normalizarFase(p.fase))
+  );
+
+  const stats = new Map();
+  function obtenerStats(id) {
+    if (!stats.has(id)) stats.set(id, { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+    return stats.get(id);
+  }
+
+  finalizados.forEach((p) => {
+    const local = obtenerStats(String(p.id_local));
+    const visita = obtenerStats(String(p.id_visitante));
+    const gl = Number(p.goles_local) || 0;
+    const gv = Number(p.goles_visitante) || 0;
+
+    local.pj++; visita.pj++;
+    local.gf += gl; local.gc += gv;
+    visita.gf += gv; visita.gc += gl;
+
+    if (gl > gv) { local.pg++; visita.pp++; }
+    else if (gl < gv) { visita.pg++; local.pp++; }
+    else { local.pe++; visita.pe++; }
+  });
+
+  const filas = Array.from(stats.entries()).map(([id, s]) => {
+    const dif = s.gf - s.gc;
+    const pts = s.pg * 3 + s.pe;
+    return { equipo: equipoInfo(id), id, ...s, dif, pts };
+  });
+
+  filas.sort((a, b) => b.pts - a.pts || b.dif - a.dif || b.gf - a.gf);
+  return filas;
+}
+
+function obtenerParticipantesPlayoff(categoria) {
+  const partidos = filtrarPorTemporada(PARTIDOS).filter(
+    (p) => p.categoria === categoria && /playoff|play\s*off/i.test(normalizarFase(p.fase))
+  );
+  if (!partidos.length) return [];
+
+  const porRonda = new Map();
+  partidos.forEach((p) => {
+    const { ronda } = analizarRondaBracket(p.etiqueta_fecha || p.fecha_nro);
+    if (!porRonda.has(ronda)) porRonda.set(ronda, new Set());
+    porRonda.get(ronda).add(String(p.id_local));
+    porRonda.get(ronda).add(String(p.id_visitante));
+  });
+
+  // La ronda con más equipos distintos es la primera (la de más participantes).
+  let mejorRonda = null, mejorSize = 0;
+  porRonda.forEach((set, ronda) => {
+    if (set.size > mejorSize) { mejorSize = set.size; mejorRonda = ronda; }
+  });
+  return mejorRonda ? Array.from(porRonda.get(mejorRonda)) : [];
+}
+
+function bloqueTablaGeneral(categoria, fasesZonaEstrictas) {
+  if (!fasesZonaEstrictas.length) return '';
+  const filas = calcularTablaMultiFase(categoria, ['Regular', ...fasesZonaEstrictas]);
+  if (!filas.length) return '';
+
+  const nDescenso = Math.min(CANTIDAD_DESCENSO_GENERAL, filas.length);
+  return `
+    <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mt-5 mb-2">Tabla General</h3>
+    ${tablaHtml(filas, filas.length - nDescenso)}
+    <p class="text-[10px] text-live px-1 mt-1.5">Últimas ${nDescenso} posiciones: descenso.</p>
+  `;
+}
+
+document.addEventListener('click', (e) => {
+  const palmaresClub = e.target.closest('[data-palmares-club]');
+if (palmaresClub) { abrirModalPalmares(palmaresClub.dataset.palmaresClub, true); return; }
+
+  const cruce = e.target.closest('[data-cruce]');
+
+  if (cruce) { abrirModalCruceDetalle(cruce.dataset.cruce); return; }
+
+  const toggle = e.target.closest('[data-toggle-categoria]');
+  if (toggle) { e.stopPropagation(); toggleCategoriaPerfil(toggle.dataset.toggleCategoria); return; }
+
+  const h2h = e.target.closest('[data-h2h-local]');
+  if (h2h) { abrirModalHistorial(h2h.dataset.h2hLocal, h2h.dataset.h2hVisitante); return; }
+
+  const perfil = e.target.closest('[data-equipo-perfil]');
+  if (perfil) { abrirModalPerfilEquipo(perfil.dataset.equipoPerfil); return; }
+
+  const eq = e.target.closest('[data-equipo-id]');
+  if (eq) abrirModalEquipo(eq.dataset.equipoId);
+});
+
+/* ============================================================
+ *  HELPERS
+ * ============================================================ */
+function normalizarEstado(estadoRaw) {
+  const e = String(estadoRaw || '').toLowerCase();
+  if (e.includes('vivo') || e.includes('jugando') || e.includes('juego')) return 'vivo';
+  if (e.includes('final')) return 'finalizado';
+  return 'programado';
+}
+
+function equipoInfo(id) {
+  return EQUIPOS_POR_ID.get(String(id)) || { nombre: 'Equipo desconocido', url_escudo: '' };
+}
+
+function actualizarContadorVivos(cantidad) {
+  const cont = document.getElementById('contador-vivos');
+  if (cantidad > 0) {
+    cont.classList.remove('hidden');
+    cont.classList.add('flex');
+    cont.querySelector('span:last-child').textContent = `${cantidad} EN VIVO`;
+  } else {
+    cont.classList.add('hidden');
+  }
+}
+
+function escudoPorDefecto(nombre) {
+  const iniciales = nombre.split(' ').slice(0, 2).map((p) => p[0]).join('').toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+    <rect width="100%" height="100%" rx="20" fill="#1A2230"/>
+    <text x="50%" y="55%" text-anchor="middle" fill="#35D07F" font-family="Inter" font-size="14" font-weight="600" dy=".1em">${iniciales}</text>
+  </svg>`;
+  return 'data:image/svg+xml;base64,' + btoa(svg);
+}
+
+function tipOnboarding(clave, mensaje) {
+  try {
+    if (localStorage.getItem('tip_' + clave) === '1') return '';
+  } catch (e) { /* localStorage puede fallar en modo privado; no es crítico */ }
+  mostrarTipModal(clave, mensaje);
+  return '';
+}
+
+function mostrarTipModal(clave, mensaje) {
+  document.getElementById('tip-modal-mensaje').textContent = mensaje;
+  document.getElementById('tip-modal-btn').onclick = () => cerrarTipOnboarding(clave);
+  document.getElementById('modal-tip').classList.remove('hidden');
+}
+
+function cerrarTipOnboarding(clave) {
+  try { localStorage.setItem('tip_' + clave, '1'); } catch (e) {}
+  document.getElementById('modal-tip').classList.add('hidden');
+}
+
+function escaparHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+function iconoPalmares(tipo) {
+  const base = 'inline-block w-3.5 h-3.5 align-[-3px]';
+  if (tipo === 'campeon') return '🏆';
+  if (tipo === 'subcampeon') return '🥈';
+  if (tipo === 'copaplata') {
+    return `<svg class="${base} text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z"/><path d="M7 5H4a2 2 0 0 0 0 4h1M17 5h3a2 2 0 0 1 0 4h-1"/></svg>`;
+  }
+  if (tipo === 'ascenso') {
+    return `<svg class="${base} text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+  }
+  if (tipo === 'descenso') {
+    return `<svg class="${base} text-live" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>`;
+  }
+  return '';
+}
+
+function normalizarBooleano(v) {
+  const s = String(v || '').trim().toLowerCase();
+  return s === 'true' || s === 'si' || s === 'sí' || s === '1' || s === 'verdadero';
+}
+
+let BANNER_SPONSOR_INDICE = 0;
+let GRANDE_SPONSOR_INDICE = 0;
+
+function aplicarSponsors(data, esFresco) {
+  SPONSORS = (data.sponsors || []).filter((s) => normalizarBooleano(s.activo));
+  iniciarBannerSponsorFijo();
+
+  if (esFresco) {
+    if (SPONSOR_MODAL_BLOQUEADO) {
+      completarProgresoSponsor();
+    } else if (!SPONSOR_GRANDE_SESION_MOSTRADO) {
+      SPONSOR_GRANDE_SESION_MOSTRADO = true;
+      mostrarSponsorGrande(false);
+    }
+  } else if (!SPONSOR_GRANDE_SESION_MOSTRADO) {
+    SPONSOR_GRANDE_SESION_MOSTRADO = true;
+    mostrarSponsorGrande(true);
+  }
+}
+
+/* --- Banner fijo, arriba del nav, rota solo cada 15s --- */
+function iniciarBannerSponsorFijo() {
+  if (BANNER_SPONSOR_INTERVALO) { clearInterval(BANNER_SPONSOR_INTERVALO); BANNER_SPONSOR_INTERVALO = null; }
+
+  const cont = document.getElementById('banner-sponsor-fijo');
+  if (!SPONSORS.length) { cont.classList.add('hidden'); return; }
+
+  BANNER_SPONSOR_INDICE = 0;
+  pintarBannerSponsorFijo();
+
+  if (SPONSORS.length > 1) {
+    BANNER_SPONSOR_INTERVALO = setInterval(() => {
+      BANNER_SPONSOR_INDICE = (BANNER_SPONSOR_INDICE + 1) % SPONSORS.length;
+      pintarBannerSponsorFijo();
+    }, 15000);
+  }
+}
+
+function pintarBannerSponsorFijo() {
+  const s = SPONSORS[BANNER_SPONSOR_INDICE];
+  const cont = document.getElementById('banner-sponsor-fijo');
+  cont.classList.remove('hidden');
+  cont.innerHTML = `
+    <a href="${s.link_url || '#'}" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 bg-surface/95 backdrop-blur border border-borde rounded-xl px-3 py-1.5 max-w-md mx-auto">
+      <img src="${s.imagen_url || ''}" alt="${escaparHtml(s.nombre || 'Sponsor')}" onerror="this.style.display='none'" class="w-5 h-5 rounded object-contain bg-elevado flex-shrink-0"/>
+      <span class="text-[10px] text-muted truncate">Publicidad · <span class="text-texto font-medium">${escaparHtml(s.nombre || 'Sponsor')}</span></span>
+    </a>
+  `;
+}
+
+/* --- Cartel grande, carga inicial + cada 10 navegaciones, rota solo --- */
+function mostrarSponsorGrande(bloqueante) {
+  if (!SPONSORS.length) return;
+  const s = SPONSORS[GRANDE_SPONSOR_INDICE % SPONSORS.length];
+
+  document.getElementById('sponsor-grande-img').src = s.imagen_url || '';
+  document.getElementById('sponsor-grande-img').alt = s.nombre || 'Sponsor';
+  document.getElementById('sponsor-grande-nombre').textContent = s.nombre || 'Sponsor';
+  document.getElementById('sponsor-grande-link-visual').href = s.link_url || '#';
+  document.getElementById('sponsor-grande-link').href = s.link_url || '#';
+  document.getElementById('modal-sponsor-grande').classList.remove('hidden');
+
+  const cerrar = document.getElementById('sponsor-grande-cerrar');
+  const progreso = document.getElementById('sponsor-grande-progreso');
+
+  if (bloqueante) {
+    SPONSOR_MODAL_BLOQUEADO = true;
+    cerrar.classList.add('hidden');
+    progreso.classList.remove('hidden');
+    iniciarProgresoSponsorSimulado();
+  } else {
+    cerrar.classList.remove('hidden');
+    progreso.classList.add('hidden');
+    if (SPONSOR_PROGRESO_INTERVALO) { clearInterval(SPONSOR_PROGRESO_INTERVALO); SPONSOR_PROGRESO_INTERVALO = null; }
+  }
+}
+
+function iniciarProgresoSponsorSimulado() {
+  SPONSOR_PROGRESO_PORCENTAJE = 0;
+  actualizarProgresoSponsorUI();
+  if (SPONSOR_PROGRESO_INTERVALO) clearInterval(SPONSOR_PROGRESO_INTERVALO);
+  SPONSOR_PROGRESO_INTERVALO = setInterval(() => {
+    const restante = 92 - SPONSOR_PROGRESO_PORCENTAJE;
+    SPONSOR_PROGRESO_PORCENTAJE += Math.max(0.5, restante * 0.08);
+    if (SPONSOR_PROGRESO_PORCENTAJE >= 92) SPONSOR_PROGRESO_PORCENTAJE = 92;
+    actualizarProgresoSponsorUI();
+  }, 150);
+}
+
+function actualizarProgresoSponsorUI() {
+  const pct = Math.round(SPONSOR_PROGRESO_PORCENTAJE);
+  document.getElementById('sponsor-grande-progreso-fill').style.width = pct + '%';
+  document.getElementById('sponsor-grande-progreso-texto').textContent = `Cargando datos… ${pct}%`;
+}
+
+function completarProgresoSponsor() {
+  if (SPONSOR_PROGRESO_INTERVALO) { clearInterval(SPONSOR_PROGRESO_INTERVALO); SPONSOR_PROGRESO_INTERVALO = null; }
+  SPONSOR_PROGRESO_PORCENTAJE = 100;
+  actualizarProgresoSponsorUI();
+  setTimeout(() => {
+    document.getElementById('sponsor-grande-progreso').classList.add('hidden');
+    document.getElementById('sponsor-grande-cerrar').classList.remove('hidden');
+    SPONSOR_MODAL_BLOQUEADO = false;
+  }, 400);
+}
+
+function cerrarSponsorGrande() {
+  document.getElementById('modal-sponsor-grande').classList.add('hidden');
+}
+
+function registrarNavegacionParaSponsor() {
+  if (!SPONSORS.length) return;
+  CONTADOR_NAVEGACIONES++;
+  if (CONTADOR_NAVEGACIONES >= 10) {
+    CONTADOR_NAVEGACIONES = 0;
+    GRANDE_SPONSOR_INDICE = (GRANDE_SPONSOR_INDICE + 1) % SPONSORS.length;
+    mostrarSponsorGrande(false);
+  }
+}
+
+function mostrarSkeleton() {
+  const skeleton = document.getElementById('skeleton');
+  document.getElementById('vista-contenido').classList.add('hidden');
+  document.getElementById('estado-error').classList.add('hidden');
+  skeleton.classList.remove('hidden');
+  skeleton.innerHTML = Array.from({ length: 5 })
+    .map(
+      () => `
+      <div class="bg-surface border border-borde rounded-2xl px-4 py-3.5 space-y-3">
+        <div class="skeleton h-3 w-24 rounded"></div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="skeleton w-7 h-7 rounded-full"></div>
+            <div class="skeleton h-3 w-28 rounded"></div>
+          </div>
+          <div class="skeleton h-4 w-4 rounded"></div>
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="skeleton w-7 h-7 rounded-full"></div>
+            <div class="skeleton h-3 w-20 rounded"></div>
+          </div>
+          <div class="skeleton h-4 w-4 rounded"></div>
+        </div>
+      </div>`
+    )
+    .join('');
+}
+
+cargarFavoritos();
+cargarDatos();
+  </script>
+</body>
+
+</html>
