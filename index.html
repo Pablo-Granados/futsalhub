@@ -110,6 +110,16 @@
     * {
       scrollbar-width: none;
     }
+
+   #vista-contenido img, #toast-sponsor img, #banner-sponsor-fijo img,
+#modal-contenido img:not(#sponsor-grande-img) {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+#vista-contenido img.img-cargada, #modal-contenido img.img-cargada,
+#toast-sponsor img.img-cargada, #banner-sponsor-fijo img.img-cargada {
+  opacity: 1;
+}
   </style>
   <script defer src="https://cloud.umami.is/script.js" data-website-id="6e64ba6f-14db-4908-9251-0f9e83fbf2ce"></script>
 </head>
@@ -200,7 +210,7 @@
       <p class="text-xs text-muted mb-3">Contanos qué viste raro — mandamos el contexto de la pantalla junto con tu
         mensaje.</p>
 
-      <textarea id="feedback-texto" rows="4" placeholder="Ej: el resultado de Banco Nación vs Sirio está mal..." class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted resize-none"></textarea>
+      <textarea id="feedback-texto" rows="4" placeholder="Ej: el resultado de equipo1 vs equipo2 está mal // Me gustaría agregar: ..." class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted resize-none"></textarea>
 
       <button onclick="enviarFeedback()" class="w-full mt-3 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Enviar</button>
       <p id="feedback-estado-envio" class="text-center text-xs text-muted mt-2 min-h-[16px]"></p>
@@ -510,6 +520,7 @@ let SPONSOR_GRANDE_SESION_MOSTRADO = false;
 let SPONSOR_MODAL_BLOQUEADO = false;
 let SPONSOR_PROGRESO_INTERVALO = null;
 let SPONSOR_PROGRESO_PORCENTAJE = 0;
+let SPONSOR_LISTO = false;
 
 let H2H_HISTORIAL_ACTUAL = [];
 let H2H_PAGINA = 0;
@@ -520,6 +531,9 @@ let BANNER_SPONSOR_INTERVALO = null;
 
 let MEDALLERO_EXPANDIDO = false;
 let EVITAR_BLUR_ACTUALIZACION = false;
+
+let PRIMERA_CARGA_PENDIENTE = true;
+
 
 function calcularTitulosCategoriaTemporada(categoria, temporada) {
   const partidos = PARTIDOS.filter((p) => p.categoria === categoria && String(p.temporada) === String(temporada));
@@ -959,26 +973,33 @@ function generarTabsCategorias() {
 async function cargarDatos() {
   const cacheLocal = leerCacheLocal();
   const teniaCacheLocal = !!cacheLocal;
+  const esPrimeraCarga = PRIMERA_CARGA_PENDIENTE;
+  PRIMERA_CARGA_PENDIENTE = false;
 
-if (teniaCacheLocal) {
+  if (teniaCacheLocal) {
     aplicarDatos(cacheLocal.data, false);
-    mostrarBanner('info', 'Actualizando datos…');
-
+    if (!esPrimeraCarga) mostrarBanner('info', 'Actualizando datos…');
   } else {
     mostrarSkeleton();
   }
 
+  if (esPrimeraCarga) {
+    mostrarSponsorGrandeInicial();
+  }
+
   try {
-const res = await fetch(APPS_SCRIPT_URL + '?api=1&_=' + Date.now(), { cache: 'no-store' });
+    const res = await fetch(APPS_SCRIPT_URL + '?api=1&_=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) throw new Error('http_' + res.status);
-    const json = await res.json();
+
+    const json = await leerRespuestaConProgreso(res);
     if (!json.ok) throw new Error(json.error || 'error_backend');
 
     aplicarDatos(json.data, true);
     guardarCacheLocal(json.data);
     ocultarBanner();
+    if (SPONSOR_MODAL_BLOQUEADO) completarProgresoSponsor();
 
-        if (typeof json.visitas === 'number') mostrarContadorVisitas(json.visitas);
+    if (typeof json.visitas === 'number') mostrarContadorVisitas(json.visitas);
   } catch (err) {
     console.error('Error cargando datos:', err);
     if (SPONSOR_MODAL_BLOQUEADO) completarProgresoSponsor();
@@ -997,6 +1018,89 @@ const res = await fetch(APPS_SCRIPT_URL + '?api=1&_=' + Date.now(), { cache: 'no
       document.getElementById('estado-error').classList.remove('hidden');
     }
   }
+}
+
+function precargarSponsorTemprano() {
+  fetch(APPS_SCRIPT_URL + '?hoja=sponsors&_=' + Date.now(), { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((json) => {
+      if (!json.ok) { SPONSOR_LISTO = true; return; }
+      const lista = (json.data || []).filter((s) => normalizarBooleano(s.activo));
+      SPONSORS = lista;
+
+      if (!lista.length) {
+        SPONSOR_LISTO = true;
+        completarSiModalEsperando();
+        return;
+      }
+
+      let pendientes = lista.length;
+      const marcarListo = () => {
+        pendientes--;
+        if (pendientes <= 0) {
+          SPONSOR_LISTO = true;
+          iniciarBannerSponsorFijo();
+          completarSiModalEsperando();
+        }
+      };
+      lista.forEach((s) => {
+        if (!s.imagen_url) { marcarListo(); return; }
+        const img = new Image();
+        img.onload = marcarListo;
+        img.onerror = marcarListo;
+        img.src = s.imagen_url;
+      });
+    })
+    .catch(() => { SPONSOR_LISTO = true; });
+}
+
+function completarSiModalEsperando() {
+  if (!SPONSOR_MODAL_BLOQUEADO) return;
+  if (SPONSORS.length) {
+    const s = SPONSORS[GRANDE_SPONSOR_INDICE % SPONSORS.length];
+    document.getElementById('sponsor-grande-img').src = s.imagen_url || '';
+    document.getElementById('sponsor-grande-img').alt = s.nombre || 'Sponsor';
+    document.getElementById('sponsor-grande-nombre').textContent = s.nombre || 'Sponsor';
+    document.getElementById('sponsor-grande-link').href = s.link_url || '#';
+    document.getElementById('sponsor-grande-link-visual').href = s.link_url || '#';
+    document.getElementById('sponsor-grande-link').classList.remove('hidden');
+  } else {
+    document.getElementById('modal-sponsor-grande').classList.add('hidden');
+    SPONSOR_MODAL_BLOQUEADO = false;
+  }
+}
+
+async function leerRespuestaConProgreso(res) {
+  const totalHeader = res.headers.get('Content-Length');
+  const total = totalHeader ? Number(totalHeader) : 0;
+
+  if (!res.body || !total) {
+    // El navegador no nos da tamaño total (pasa seguido con Apps Script,
+    // que no siempre manda Content-Length) — seguimos con la simulación
+    // hasta 92%, igual que antes, y cerramos al terminar.
+    return res.json();
+  }
+
+  detenerProgresoSimulado();
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let recibido = 0;
+  let textoCompleto = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    recibido += value.length;
+    textoCompleto += decoder.decode(value, { stream: true });
+    if (SPONSOR_MODAL_BLOQUEADO) {
+      const pct = Math.min(99, Math.round((recibido / total) * 100));
+      SPONSOR_PROGRESO_PORCENTAJE = pct;
+      actualizarProgresoSponsorUI();
+    }
+  }
+
+  return JSON.parse(textoCompleto);
 }
 
 function mostrarBanner(tipo, texto) {
@@ -3221,19 +3325,19 @@ let BANNER_SPONSOR_INDICE = 0;
 let GRANDE_SPONSOR_INDICE = 0;
 
 function aplicarSponsors(data, esFresco) {
-  SPONSORS = (data.sponsors || []).filter((s) => normalizarBooleano(s.activo));
-  iniciarBannerSponsorFijo();
+  const listaNueva = (data.sponsors || []).filter((s) => normalizarBooleano(s.activo));
+  const cambio = listaNueva.length !== SPONSORS.length ||
+    listaNueva.some((s, i) => !SPONSORS[i] || s.nombre !== SPONSORS[i].nombre);
 
-  if (esFresco) {
-    if (SPONSOR_MODAL_BLOQUEADO) {
-      completarProgresoSponsor();
-    } else if (!SPONSOR_GRANDE_SESION_MOSTRADO) {
-      SPONSOR_GRANDE_SESION_MOSTRADO = true;
-      mostrarSponsorGrande(false);
-    }
-  } else if (!SPONSOR_GRANDE_SESION_MOSTRADO) {
+  if (cambio) {
+    SPONSORS = listaNueva;
+    SPONSOR_LISTO = true;
+    iniciarBannerSponsorFijo();
+  }
+
+  if (esFresco && !SPONSOR_GRANDE_SESION_MOSTRADO && SPONSORS.length) {
     SPONSOR_GRANDE_SESION_MOSTRADO = true;
-    mostrarSponsorGrande(true);
+    mostrarSponsorGrande(false);
   }
 }
 
@@ -3294,6 +3398,26 @@ function mostrarSponsorGrande(bloqueante) {
   }
 }
 
+function mostrarSponsorGrandeInicial() {
+  SPONSOR_GRANDE_SESION_MOSTRADO = true;
+  SPONSOR_MODAL_BLOQUEADO = true;
+
+  if (SPONSOR_LISTO && !SPONSORS.length) return; // nada para mostrar
+
+  document.getElementById('sponsor-grande-cerrar').classList.add('hidden');
+  document.getElementById('sponsor-grande-progreso').classList.remove('hidden');
+  document.getElementById('modal-sponsor-grande').classList.remove('hidden');
+  iniciarProgresoSponsorSimulado();
+
+  if (SPONSOR_LISTO && SPONSORS.length) {
+    completarSiModalEsperando();
+  } else {
+    document.getElementById('sponsor-grande-img').src = '';
+    document.getElementById('sponsor-grande-nombre').textContent = 'Cargando…';
+    document.getElementById('sponsor-grande-link').classList.add('hidden');
+  }
+}
+
 function iniciarProgresoSponsorSimulado() {
   SPONSOR_PROGRESO_PORCENTAJE = 0;
   actualizarProgresoSponsorUI();
@@ -3304,6 +3428,10 @@ function iniciarProgresoSponsorSimulado() {
     if (SPONSOR_PROGRESO_PORCENTAJE >= 92) SPONSOR_PROGRESO_PORCENTAJE = 92;
     actualizarProgresoSponsorUI();
   }, 150);
+}
+
+function detenerProgresoSimulado() {
+  if (SPONSOR_PROGRESO_INTERVALO) { clearInterval(SPONSOR_PROGRESO_INTERVALO); SPONSOR_PROGRESO_INTERVALO = null; }
 }
 
 function actualizarProgresoSponsorUI() {
@@ -3365,6 +3493,38 @@ function mostrarSkeleton() {
     )
     .join('');
 }
+
+let IMAGENES_CARGADAS = new Set();
+
+document.addEventListener('load', (e) => {
+  if (e.target.tagName === 'IMG') {
+    e.target.classList.add('img-cargada');
+    if (e.target.src) IMAGENES_CARGADAS.add(e.target.src);
+  }
+}, true);
+
+function marcarImagenSiCacheada(img) {
+  if (img.complete || IMAGENES_CARGADAS.has(img.src)) {
+    img.classList.add('img-cargada');
+  }
+}
+
+const observadorImagenes = new MutationObserver((mutaciones) => {
+  mutaciones.forEach((m) => {
+    m.addedNodes.forEach((nodo) => {
+      if (nodo.nodeType !== 1) return;
+      if (nodo.tagName === 'IMG') marcarImagenSiCacheada(nodo);
+      if (nodo.querySelectorAll) nodo.querySelectorAll('img').forEach(marcarImagenSiCacheada);
+    });
+  });
+});
+
+const contVista = document.getElementById('vista-contenido');
+const contModal = document.getElementById('modal-contenido');
+if (contVista) observadorImagenes.observe(contVista, { childList: true, subtree: true });
+if (contModal) observadorImagenes.observe(contModal, { childList: true, subtree: true });
+
+precargarSponsorTemprano();
 
 cargarFavoritos();
 cargarDatos();
