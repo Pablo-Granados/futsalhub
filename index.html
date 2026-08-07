@@ -299,7 +299,7 @@
         // clave = "categoria|temporada", valor = array de nombres de equipo (tal
         // cual figuran en la hoja "equipos") que efectivamente descendieron.
         const DESCENSOS_MANUALES = {
-            'Femenino A|2025': ['Náutico'],
+            'Femenino A|2025': ['Náutico','Unión Central'],
         };
 
         function tieneDescenso(categoria) {
@@ -3446,7 +3446,7 @@
                 SPONSOR_PROGRESO_PORCENTAJE += Math.max(0.5, restante * 0.08);
                 if (SPONSOR_PROGRESO_PORCENTAJE >= 92) SPONSOR_PROGRESO_PORCENTAJE = 92;
                 actualizarProgresoSponsorUI();
-            }, 150);
+            }, 100);
         }
 
         function detenerProgresoSimulado() {
@@ -3467,7 +3467,7 @@
                 document.getElementById('sponsor-grande-progreso').classList.add('hidden');
                 document.getElementById('sponsor-grande-cerrar').classList.remove('hidden');
                 SPONSOR_MODAL_BLOQUEADO = false;
-            }, 400);
+            }, 100);
         }
 
         function cerrarSponsorGrande() {
