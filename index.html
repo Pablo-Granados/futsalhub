@@ -867,9 +867,20 @@
 
         function abrirModalPalmares(claveClubSeleccionado, volverMedallero) {
             PALMARES_CLUB_ACTUAL = claveClubSeleccionado;
-            PALMARES_VOLVER_MEDALLERO = !!volverMedallero;
             PALMARES_FILTRO_TIPO = null;
-            document.getElementById('btn-volver-modal').classList.toggle('hidden', !PALMARES_VOLVER_MEDALLERO);
+
+            // Si ya había un "volver" en curso (por ejemplo, veníamos de H2H → perfil →
+            // ahora palmarés), lo encadenamos en vez de perderlo.
+            if (volverMedallero) {
+                PALMARES_VOLVER_MEDALLERO = true;
+                ULTIMO_VOLVER_CUSTOM = null;
+            } else if (ULTIMO_VOLVER_CUSTOM || PALMARES_VOLVER_MEDALLERO) {
+                // Se mantiene el "volver" que ya estaba activo (viene del perfil de club).
+            } else {
+                PALMARES_VOLVER_MEDALLERO = false;
+            }
+
+            document.getElementById('btn-volver-modal').classList.toggle('hidden', !(PALMARES_VOLVER_MEDALLERO || ULTIMO_VOLVER_CUSTOM));
             renderModalPalmaresClub();
             document.getElementById('modal-equipo').classList.remove('hidden');
         }
@@ -1025,6 +1036,7 @@
         }
 
         async function cargarDatos() {
+            const inicioCarga = Date.now();
             const cacheLocal = leerCacheLocal();
             const teniaCacheLocal = !!cacheLocal;
             const esPrimeraCarga = PRIMERA_CARGA_PENDIENTE;
@@ -1048,6 +1060,7 @@
                 const json = await leerRespuestaConProgreso(res);
                 if (!json.ok) throw new Error(json.error || 'error_backend');
 
+                guardarDuracionCarga(Date.now() - inicioCarga);
                 aplicarDatos(json.data, true);
                 guardarCacheLocal(json.data);
                 ocultarBanner();
@@ -3821,12 +3834,47 @@
             SPONSOR_PROGRESO_PORCENTAJE = 0;
             actualizarProgresoSponsorUI();
             if (SPONSOR_PROGRESO_INTERVALO) clearInterval(SPONSOR_PROGRESO_INTERVALO);
+
+            const inicio = Date.now();
+            // Duración esperada estimada según el promedio de las últimas cargas
+            // reales (guardado en localStorage) — si no hay historial, arranca
+            // asumiendo 3 segundos, y se va autoajustando con el uso.
+            const duracionEstimada = obtenerDuracionEstimadaCarga();
+
             SPONSOR_PROGRESO_INTERVALO = setInterval(() => {
-                const restante = 92 - SPONSOR_PROGRESO_PORCENTAJE;
-                SPONSOR_PROGRESO_PORCENTAJE += Math.max(0.5, restante * 0.08);
-                if (SPONSOR_PROGRESO_PORCENTAJE >= 92) SPONSOR_PROGRESO_PORCENTAJE = 92;
+                const transcurrido = Date.now() - inicio;
+                // Curva que llega a ~90% en el tiempo estimado, y de ahí en más
+                // avanza mucho más lento (para no quedar pegada en un solo número
+                // fijo por 7-8 segundos si la carga real tarda más de lo esperado).
+                let pct;
+                if (transcurrido < duracionEstimada) {
+                    pct = (transcurrido / duracionEstimada) * 90;
+                } else {
+                    const extra = transcurrido - duracionEstimada;
+                    pct = 90 + Math.min(9, extra / 400);
+                }
+                SPONSOR_PROGRESO_PORCENTAJE = Math.min(99, pct);
                 actualizarProgresoSponsorUI();
             }, 100);
+        }
+
+        function obtenerDuracionEstimadaCarga() {
+            try {
+                const guardada = localStorage.getItem('duracion_carga_ms');
+                return guardada ? Number(guardada) : 3000;
+            } catch (e) {
+                return 3000;
+            }
+        }
+
+        function guardarDuracionCarga(ms) {
+            try {
+                // Promedio suavizado con la última medición, para que no salte
+                // bruscamente de una carga a otra.
+                const anterior = obtenerDuracionEstimadaCarga();
+                const nueva = Math.round(anterior * 0.6 + ms * 0.4);
+                localStorage.setItem('duracion_carga_ms', String(Math.min(nueva, 15000)));
+            } catch (e) { /* no crítico */ }
         }
 
         function detenerProgresoSimulado() {
