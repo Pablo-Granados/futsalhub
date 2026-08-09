@@ -202,9 +202,9 @@
         <div
             class="relative bg-surface border border-borde rounded-3xl w-full max-w-md p-5 max-h-[80vh] overflow-y-auto">
             <button id="btn-volver-modal" onclick="volverModalEquipo()"
-                class="hidden absolute top-3 left-3 text-muted text-lg leading-none">←</button>
+                class="hidden absolute top-3 left-3 text-blue-400 text-lg leading-none">←</button>
             <button onclick="cerrarModalEquipo()"
-                class="absolute top-3 right-3 text-muted text-lg leading-none">✕</button>
+                class="absolute top-3 right-3 text-live text-lg leading-none">✕</button>
             <div id="modal-contenido"></div>
         </div>
     </div>
@@ -213,8 +213,7 @@
     <div id="modal-feedback" class="hidden fixed inset-0 z-50 flex items-center justify-center px-4">
         <div class="absolute inset-0 bg-black/70" onclick="cerrarModalFeedback()"></div>
         <div class="relative bg-surface border border-borde rounded-3xl w-full max-w-md p-5">
-            <button onclick="cerrarModalFeedback()"
-                class="absolute top-3 right-3 text-muted text-lg leading-none">✕</button>
+            <button onclick="cerrarModalFeedback()" class="absolute top-3 right-3 text-live text-lg leading-none">✕</button>
             <h2 class="font-display text-lg tracking-wide mb-1">Reportar un problema</h2>
             <p class="text-xs text-muted mb-3">Contanos qué viste raro — mandamos el contexto de la pantalla junto con
                 tu
@@ -275,8 +274,7 @@
         <div class="absolute inset-0 bg-black/70" onclick="cerrarModalAdmin()"></div>
         <div
             class="relative bg-surface border border-borde rounded-3xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto">
-            <button onclick="cerrarModalAdmin()"
-                class="absolute top-3 right-3 text-muted text-lg leading-none">✕</button>
+            <button onclick="cerrarModalAdmin()" class="absolute top-3 right-3 text-live text-lg leading-none">✕</button>
             <div id="admin-contenido"></div>
         </div>
     </div>
@@ -299,7 +297,7 @@
         // clave = "categoria|temporada", valor = array de nombres de equipo (tal
         // cual figuran en la hoja "equipos") que efectivamente descendieron.
         const DESCENSOS_MANUALES = {
-            'Femenino A|2025': ['Náutico','Unión Central'],
+            'Femenino A|2025': ['Náutico', 'Unión Central'],
         };
 
         function tieneDescenso(categoria) {
@@ -629,7 +627,7 @@
             function obtenerEntrada(equipo) {
                 const clave = claveClub(equipo);
                 if (!porClub.has(clave)) {
-                    porClub.set(clave, { _clave: clave, nombre: equipo.nombre, url_escudo: equipo.url_escudo, oros: 0, platas: 0, copaPlata: 0, ascensos: 0, descensos: 0, detalle: [] });
+                    porClub.set(clave, { _clave: clave, nombre: equipo.nombre, url_escudo: equipo.url_escudo, oros: 0, platas: 0, copaPlata: 0, verano: 0, ascensos: 0, descensos: 0, detalle: [] });
                 }
                 return porClub.get(clave);
             }
@@ -707,6 +705,26 @@
                 }
             });
 
+            CAMPEONES_MANUAL.forEach((c) => {
+                if (!c.id_club) return;
+                const { fase, temporada } = parsearTorneoYAnio(c.torneo_anio);
+                const esCopaPlata = /copa de plata/i.test(fase);
+                const esVerano = /verano/i.test(fase);
+                const equipoSintetico = buscarEquipoPorIdClub(c.id_club) || { id_club: c.id_club, nombre: c.nombre, url_escudo: '' };
+                const e = obtenerEntrada(equipoSintetico);
+
+                if (esVerano) {
+                    e.verano = (e.verano || 0) + 1;
+                    e.detalle.push({ tipo: 'verano', categoria: c.categoria, temporada, fase, partidos: [] });
+                } else if (esCopaPlata) {
+                    e.copaPlata++;
+                    e.detalle.push({ tipo: 'copaplata', categoria: c.categoria, temporada, fase, partidos: [] });
+                } else {
+                    e.oros++;
+                    e.detalle.push({ tipo: 'campeon', categoria: c.categoria, temporada, fase, partidos: [] });
+                }
+            });
+
             return porClub;
         }
 
@@ -775,6 +793,7 @@
         <td class="py-2 text-center font-mono text-[10px] font-semibold">${iconoPalmares('campeon')}${c.oros}</td>
         <td class="py-2 text-center font-mono text-[10px] font-semibold">${iconoPalmares('subcampeon')}${c.platas}</td>
         <td class="py-2 pr-1 text-center font-mono text-[10px] font-semibold">${iconoPalmares('copaplata')}${c.copaPlata}</td>
+                <td class="py-2 text-center font-mono text-[10px] font-semibold">${iconoPalmares('verano')}${c.verano}</td>
       </tr>
     `)
                 .join('');
@@ -857,9 +876,9 @@
             const entrada = mapa.get(PALMARES_CLUB_ACTUAL);
             if (!entrada) return;
 
-            const tipos = ['campeon', 'subcampeon', 'copaplata', 'ascenso', 'descenso'];
-            const conteos = { campeon: entrada.oros, subcampeon: entrada.platas, copaplata: entrada.copaPlata, ascenso: entrada.ascensos, descenso: entrada.descensos };
-            const nombres = { campeon: 'Campeón', subcampeon: 'Subcampeón', copaplata: 'Campeón Copa de Plata', ascenso: 'Ascenso', descenso: 'Descenso' };
+            const tipos = ['campeon', 'subcampeon', 'copaplata', 'verano', 'ascenso', 'descenso'];
+            const conteos = { campeon: entrada.oros, subcampeon: entrada.platas, copaplata: entrada.copaPlata, verano: entrada.verano, ascenso: entrada.ascensos, descenso: entrada.descensos };
+            const nombres = { campeon: 'Campeón', subcampeon: 'Subcampeón', copaplata: 'Campeón Copa de Plata', verano: 'Campeón Torneo de Verano', ascenso: 'Ascenso', descenso: 'Descenso' };
 
             if (!PALMARES_FILTRO_TIPO || conteos[PALMARES_FILTRO_TIPO] === 0) {
                 PALMARES_FILTRO_TIPO = tipos.find((t) => conteos[t] > 0) || 'campeon';
@@ -885,7 +904,7 @@
             const detalleHtml = categoriasOrdenadas.map((cat) => {
                 const lista = porCategoria.get(cat);
                 const bloques = lista.map((t) => {
-                    const etiquetaFase = (t.tipo === 'ascenso' || t.tipo === 'descenso' || t.tipo === 'copaplata') ? '' : (t.fase ? ' ' + escaparHtml(t.fase) : '');
+                    const etiquetaFase = (t.tipo === 'ascenso' || t.tipo === 'descenso' || t.tipo === 'copaplata' || t.tipo === 'verano') ? '' : (t.fase ? ' ' + escaparHtml(t.fase) : '');
                     return `
         <p class="text-[11px] font-semibold text-muted mt-2">${escaparHtml(t.temporada)}</p>
         <p class="text-xs text-texto pl-3">${iconoPalmares(t.tipo)} ${escaparHtml(nombres[t.tipo])}${etiquetaFase}</p>
@@ -914,7 +933,17 @@
         }
 
         function volverModalEquipo() {
-            if (PALMARES_VOLVER_MEDALLERO) abrirModalMedalleroGeneral();
+            if (ULTIMO_VOLVER_CUSTOM) {
+                const fn = ULTIMO_VOLVER_CUSTOM;
+                ULTIMO_VOLVER_CUSTOM = null;
+                PALMARES_VOLVER_MEDALLERO = false;
+                fn();
+                return;
+            }
+            if (PALMARES_VOLVER_MEDALLERO) {
+                PALMARES_VOLVER_MEDALLERO = false;
+                abrirModalMedalleroGeneral();
+            }
         }
 
         /* ============================================================
@@ -937,6 +966,8 @@
 
         function aplicarDatos(data, esFresco = true) {
             const { equipos, partidos, jugadores } = data;
+            CAMPEONES_MANUAL = data.campeonesManual || [];
+            AJUSTES_PUNTOS = data.ajustesPuntos || [];
             EQUIPOS = equipos;
             EQUIPOS_POR_ID = new Map(equipos.map((eq) => [String(eq.id_equipo), eq]));
             PARTIDOS = partidos;
@@ -1165,6 +1196,8 @@
         let TEMPORADA_TABLA = null;  // exclusiva de la pestaña Tabla, no contamina el restolet CAMPEONES_TEMPORADA = {};
         let VISTA_ANTERIOR = null;
         let CAMPEONES_TEMPORADA = {};
+        let CAMPEONES_MANUAL = [];
+        let AJUSTES_PUNTOS = [];
         let DESEMPATES_TEMPORADA = {};
         window.ARF_RESULTADOS = { campeones: CAMPEONES_TEMPORADA, desempates: DESEMPATES_TEMPORADA };
         let CRUCES_INDEX = new Map();
@@ -1627,6 +1660,15 @@
                 return { equipo: equipoInfo(id), id, ...s, dif, pts };
             });
 
+            const temporadaParaAjustes = temporadaOverride !== undefined ? temporadaOverride : TEMPORADA_TABLA;
+            const ajustesAplicables = AJUSTES_PUNTOS.filter((a) =>
+                a.categoria === categoria && String(a.temporada) === String(temporadaParaAjustes)
+            );
+            ajustesAplicables.forEach((a) => {
+                const fila = filas.find((f) => String(f.id) === String(a.id_equipo));
+                if (fila) fila.pts += Number(a.puntos) || 0;
+            });
+
             filas.sort((a, b) => b.pts - a.pts || b.dif - a.dif || b.gf - a.gf);
             return filas;
         }
@@ -1902,7 +1944,7 @@
                     ? b.filas.length - Math.min(CANTIDAD_DESCENSO_GENERAL, b.filas.length)
                     : undefined;
                 const enCurso = b.fase === 'Regular' && temporadaEnCurso(categoriaParaTabla, TEMPORADA_TABLA);
-                html += bloqueTablaFase(b.titulo, b.filas, b.fase, asignaciones.get(idx) || [], umbralRegular, enCurso);
+                html += bloqueTablaFase(b.titulo, b.filas, b.fase, asignaciones.get(idx) || [], umbralRegular, enCurso, categoriaParaTabla, TEMPORADA_TABLA);
 
                 if (b.fase === 'Regular' && umbralRegular != null) {
                     const claveOverride = categoriaParaTabla + '|' + TEMPORADA_TABLA;
@@ -1965,7 +2007,7 @@
   `;
         }
 
-        function bloqueTablaFase(titulo, filas, fase, desempates, umbralDescenso, enCurso) {
+        function bloqueTablaFase(titulo, filas, fase, desempates, umbralDescenso, enCurso, categoriaFase, temporadaFase) {
             let extra = '';
             let campeonId = null;
 
@@ -2003,10 +2045,23 @@
                 ? `<p class="text-[10px] text-live px-1 mt-1.5 mb-1">Últimas ${filas.length - umbralDescenso} posiciones: ${enCurso ? 'en puestos de descenso' : 'descenso'}.</p>`
                 : '';
 
+            const ajustesDeEstaFase = AJUSTES_PUNTOS.filter((a) =>
+                a.categoria === arguments[6] && String(a.temporada) === String(arguments[7]) &&
+                filas.some((f) => String(f.id) === String(a.id_equipo))
+            );
+            const captionAjustes = ajustesDeEstaFase.length
+                ? ajustesDeEstaFase.map((a) => {
+                    const eq = equipoInfo(a.id_equipo);
+                    const signo = Number(a.puntos) >= 0 ? '+' : '';
+                    return `<p class="text-[10px] text-warning px-1 mt-1">${escaparHtml(eq.nombre)}: ${signo}${a.puntos} pts${a.motivo ? ' — ' + escaparHtml(a.motivo) : ''}</p>`;
+                }).join('')
+                : '';
+
             return `
     ${titulo ? `<h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mt-4 mb-2">${escaparHtml(titulo)}</h3>` : ''}
     ${tablaHtml(filas, umbralDescenso)}
     ${captionDescenso}
+    ${captionAjustes}
     ${extra}
   `;
         }
@@ -2273,6 +2328,20 @@
             return equipo.id_club ? ('club_' + String(equipo.id_club).trim().toLowerCase()) : normalizarClub(equipo.nombre);
         }
 
+        function parsearTorneoYAnio(texto) {
+            const match = String(texto || '').match(/(\d{4})\s*$/);
+            if (match) {
+                const anio = match[1];
+                const fase = texto.replace(match[0], '').trim();
+                return { fase: fase || 'Campeón', temporada: anio };
+            }
+            return { fase: texto, temporada: '' };
+        }
+
+        function buscarEquipoPorIdClub(idClub) {
+            return EQUIPOS.find((e) => e.id_club && String(e.id_club).trim().toLowerCase() === String(idClub).trim().toLowerCase());
+        }
+
         function cargarFavoritos() {
             try {
                 const raw = localStorage.getItem('favoritos_clubes');
@@ -2288,10 +2357,42 @@
             return FAVORITOS.has(claveClub(equipo));
         }
 
-        function toggleFavorito(equipo) {
+        let CLUB_PENDIENTE_DESFAV = null;
+
+        function toggleFavorito(equipo, alConfirmar) {
             const clave = claveClub(equipo);
-            if (FAVORITOS.has(clave)) FAVORITOS.delete(clave); else FAVORITOS.add(clave);
+            if (FAVORITOS.has(clave)) {
+                CLUB_PENDIENTE_DESFAV = { equipo, alConfirmar };
+                const modal = document.getElementById('modal-confirmar-desfav');
+                document.getElementById('confirmar-desfav-texto').textContent = `¿Estás seguro que deseas sacar a ${equipo.nombre} de tus favoritos?`;
+                modal.style.zIndex = '999999';
+                modal.style.position = 'fixed';
+                modal.style.display = 'flex';
+                modal.classList.remove('hidden');
+            } else {
+                FAVORITOS.add(clave);
+                guardarFavoritos();
+                if (alConfirmar) alConfirmar();
+            }
+        }
+
+        function cerrarConfirmarDesfav() {
+            const modal = document.getElementById('modal-confirmar-desfav');
+            modal.classList.add('hidden');
+            modal.style.display = '';
+            CLUB_PENDIENTE_DESFAV = null;
+        }
+
+        function confirmarDesfavorito() {
+            if (!CLUB_PENDIENTE_DESFAV) return;
+            const { equipo, alConfirmar } = CLUB_PENDIENTE_DESFAV;
+            FAVORITOS.delete(claveClub(equipo));
             guardarFavoritos();
+            const modal = document.getElementById('modal-confirmar-desfav');
+            modal.classList.add('hidden');
+            modal.style.display = '';
+            CLUB_PENDIENTE_DESFAV = null;
+            if (alConfirmar) alConfirmar();
         }
 
         function familiaCategoria(categoria) {
@@ -2425,10 +2526,13 @@
         function abrirModalEquipo(idEquipo) {
             const equipo = equipoInfo(idEquipo);
             const forma = calcularForma(idEquipo);
+            ULTIMO_VOLVER_CUSTOM = null;
+            PALMARES_VOLVER_MEDALLERO = false;
+            document.getElementById('btn-volver-modal').classList.add('hidden');
 
             document.getElementById('modal-contenido').innerHTML = `
     <div class="flex items-center gap-3 mb-5">
-      <img src="${equipo.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipo.nombre)}');" class="w-14 h-14 rounded-xl object-cover bg-elevado flex-shrink-0"/>
+      <img src="${equipo.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipo.nombre)}');" class="w-14 h-14 rounded-xl object-cover bg-elevado flex-shrink-0 cursor-pointer" data-abrir-perfil="${equipo.id_equipo}" data-volver-forma="${idEquipo}"/>
       <div class="min-w-0">
         <h2 class="font-display text-xl tracking-wide truncate">${escaparHtml(equipo.nombre)}</h2>
         <span class="text-[11px] text-muted uppercase tracking-wide">${escaparHtml(equipo.categoria || '')}</span>
@@ -2447,6 +2551,15 @@
   `;
             document.getElementById('modal-equipo').classList.remove('hidden');
         }
+
+        function abrirPerfilConVolver(idEquipoDestino, comoVolver) {
+            abrirModalPerfilEquipo(idEquipoDestino);
+            PALMARES_VOLVER_MEDALLERO = true;
+            document.getElementById('btn-volver-modal').classList.remove('hidden');
+            ULTIMO_VOLVER_CUSTOM = comoVolver;
+        }
+
+        let ULTIMO_VOLVER_CUSTOM = null;
 
         function badgeForma(f, chico) {
             const estilos = { G: 'bg-accent text-cancha', E: 'bg-warning text-cancha', P: 'bg-live text-white' };
@@ -2470,6 +2583,8 @@
     </div>
   `;
         }
+
+
 
         /* ============================================================
          *  MODAL: HISTORIAL CARA A CARA (desde Partidos)
@@ -2495,9 +2610,20 @@
                 });
         }
 
+        let ULTIMO_H2H = null;
+
+        function toggleFavoritoH2H(idEquipo) {
+            const equipo = equipoInfo(idEquipo);
+            toggleFavorito(equipo, () => abrirModalHistorial(ULTIMO_H2H.idLocal, ULTIMO_H2H.idVisitante));
+        }
+
         function abrirModalHistorial(idLocal, idVisitante) {
             const equipoA = equipoInfo(idLocal);
             const equipoB = equipoInfo(idVisitante);
+            ULTIMO_H2H = { idLocal, idVisitante };
+            ULTIMO_VOLVER_CUSTOM = null;
+            PALMARES_VOLVER_MEDALLERO = false;
+            document.getElementById('btn-volver-modal').classList.add('hidden');
             const clubA = claveClub(equipoA);
             H2H_HISTORIAL_ACTUAL = calcularHistorialH2H(idLocal, idVisitante);
             H2H_PAGINA = 0;
@@ -2514,16 +2640,21 @@
 
             document.getElementById('modal-contenido').innerHTML = `
     <div class="flex items-center justify-center gap-4 mb-2">
-      <div class="flex flex-col items-center gap-1.5 w-20">
-        <img src="${equipoA.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoA.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado"/>
+      <div class="flex flex-col items-center gap-1.5 w-24">
+        <div class="relative">
+          <img src="${equipoA.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoA.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${equipoA.id_equipo}" data-volver-h2h="1"/>
+        </div>
         <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoA.nombre)}</span>
+        <button onclick="toggleFavoritoH2H('${equipoA.id_equipo}')" class="text-lg leading-none">${esFavorito(equipoA) ? '⭐' : '☆'}</button>
       </div>
       <span class="font-display text-sm text-muted">VS</span>
-      <div class="flex flex-col items-center gap-1.5 w-20">
-        <img src="${equipoB.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoB.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado"/>
+      <div class="flex flex-col items-center gap-1.5 w-24">
+        <img src="${equipoB.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoB.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${equipoB.id_equipo}" data-volver-h2h="1"/>
         <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoB.nombre)}</span>
+        <button onclick="toggleFavoritoH2H('${equipoB.id_equipo}')" class="text-lg leading-none">${esFavorito(equipoB) ? '⭐' : '☆'}</button>
       </div>
     </div>
+
     <p class="text-center text-[10px] text-muted uppercase tracking-wide mb-5">${escaparHtml(equipoA.categoria || '')}</p>
 
     ${H2H_HISTORIAL_ACTUAL.length ? `
@@ -2534,6 +2665,7 @@
       </div>
       <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold mb-2">Historial de enfrentamientos</h3>
       <div id="h2h-lista"></div>
+
       <div id="h2h-paginacion" class="flex items-center justify-between mt-3"></div>
     ` : `<p class="text-xs text-muted text-center py-6">Todavía no se enfrentaron en esta categoría.</p>`}
   `;
@@ -2998,7 +3130,7 @@
                 .then((data) => {
                     if (data.ok && data.resultado) {
                         ADMIN_PIN_ACTUAL = pin;
-                        renderAdminPanelCategorias();
+                        renderAdminMenu();
                     } else {
                         estadoEl.textContent = 'PIN incorrecto.';
                     }
@@ -3047,6 +3179,235 @@
             };
 
             renderAdminJornadas();
+        }
+
+        function renderAdminMenu() {
+            document.getElementById('admin-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-display text-lg tracking-wide">Panel de administración</h2>
+      <button onclick="cerrarSesionAdmin()" class="text-[10px] text-muted uppercase font-semibold">Salir</button>
+    </div>
+    <div class="space-y-2">
+      <button onclick="renderAdminPanelCategorias()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">📋 Cargar resultado</button>
+      <button onclick="renderAdminEditarResultado()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">✏️ Editar resultado</button>
+      <button onclick="renderAdminAjustarPuntos()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">⚖️ Ajustar puntos</button>
+    </div>
+  `;
+        }
+
+        /* ---------- Editar resultado ya cargado ---------- */
+        let ADMIN_EDIT_CATEGORIA = null;
+        let ADMIN_EDIT_JORNADA = null;
+
+        function renderAdminEditarResultado() {
+            const partidos = filtrarPorTemporada(PARTIDOS);
+            const categorias = ordenarCategorias([...new Set(partidos.map((p) => p.categoria))]);
+
+            if (!ADMIN_EDIT_CATEGORIA || !categorias.includes(ADMIN_EDIT_CATEGORIA)) {
+                ADMIN_EDIT_CATEGORIA = categorias[0] || null;
+            }
+
+            document.getElementById('admin-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="renderAdminMenu()" class="text-muted text-sm">←</button>
+      <h2 class="font-display text-base tracking-wide">Editar resultado</h2>
+      <span></span>
+    </div>
+    ${categorias.length ? `
+      <label class="text-[11px] uppercase text-muted font-semibold">Categoría</label>
+      <select id="admin-edit-sel-categoria" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"></select>
+      <label class="text-[11px] uppercase text-muted font-semibold">Fecha</label>
+      <select id="admin-edit-sel-jornada" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"></select>
+      <div id="admin-edit-lista-partidos" class="space-y-2"></div>
+    ` : `<p class="text-xs text-muted text-center py-8">No hay partidos cargados.</p>`}
+  `;
+
+            if (!categorias.length) return;
+
+            const selCat = document.getElementById('admin-edit-sel-categoria');
+            selCat.innerHTML = categorias.map((c) => `<option value="${c}" ${c === ADMIN_EDIT_CATEGORIA ? 'selected' : ''}>${c}</option>`).join('');
+            selCat.onchange = () => {
+                ADMIN_EDIT_CATEGORIA = selCat.value;
+                ADMIN_EDIT_JORNADA = null;
+                renderAdminEditJornadas();
+            };
+
+            renderAdminEditJornadas();
+        }
+
+        function renderAdminEditJornadas() {
+            const partidos = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === ADMIN_EDIT_CATEGORIA);
+            const jornadas = [...new Set(partidos.map((p) => Number(p.fecha_nro)))].sort((a, b) => a - b);
+
+            if (ADMIN_EDIT_JORNADA === null || !jornadas.includes(ADMIN_EDIT_JORNADA)) {
+                ADMIN_EDIT_JORNADA = jornadas.length ? jornadas[0] : null;
+            }
+
+            const sel = document.getElementById('admin-edit-sel-jornada');
+            sel.innerHTML = jornadas.map((j) => `<option value="${j}" ${j === ADMIN_EDIT_JORNADA ? 'selected' : ''}>Fecha ${j}</option>`).join('');
+            sel.onchange = () => {
+                ADMIN_EDIT_JORNADA = Number(sel.value);
+                renderAdminEditListaPartidos();
+            };
+
+            renderAdminEditListaPartidos();
+        }
+
+        function renderAdminEditListaPartidos() {
+            const lista = filtrarPorTemporada(PARTIDOS).filter(
+                (p) => p.categoria === ADMIN_EDIT_CATEGORIA && Number(p.fecha_nro) === ADMIN_EDIT_JORNADA
+            );
+            const cont = document.getElementById('admin-edit-lista-partidos');
+
+            cont.innerHTML = lista
+                .map((p, i) => {
+                    const local = equipoInfo(p.id_local);
+                    const visitante = equipoInfo(p.id_visitante);
+                    return `
+        <div class="bg-elevado rounded-xl p-3" data-idx="${i}">
+          <div class="flex items-center justify-between text-xs mb-2 gap-2">
+            <span class="truncate flex-1">${escaparHtml(local.nombre)}</span>
+            <span class="truncate flex-1 text-right">${escaparHtml(visitante.nombre)}</span>
+          </div>
+          <div class="flex items-center justify-center gap-2 mb-2">
+            <input type="number" min="0" class="admin-edit-input-local w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" value="${p.goles_local ?? ''}"/>
+            <span class="text-muted text-sm">—</span>
+            <input type="number" min="0" class="admin-edit-input-visitante w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" value="${p.goles_visitante ?? ''}"/>
+          </div>
+          <label class="text-[9px] uppercase text-muted">Fecha del partido</label>
+          <input type="date" class="admin-edit-input-fecha w-full mt-1 bg-cancha border border-borde rounded-lg py-1.5 px-2 text-xs text-texto" value="${p.fecha || ''}"/>
+          <button onclick="guardarEdicionResultado(${i})" class="w-full mt-2 bg-accent text-cancha font-semibold text-xs rounded-lg py-2">Guardar cambios</button>
+          <p class="admin-edit-estado text-center text-[10px] mt-1 min-h-[14px] text-muted"></p>
+        </div>
+      `;
+                })
+                .join('');
+
+            cont.dataset.partidos = JSON.stringify(lista);
+        }
+
+        function guardarEdicionResultado(idx) {
+            const cont = document.getElementById('admin-edit-lista-partidos');
+            const lista = JSON.parse(cont.dataset.partidos || '[]');
+            const p = lista[idx];
+            const fila = cont.querySelector(`[data-idx="${idx}"]`);
+            const gl = fila.querySelector('.admin-edit-input-local').value;
+            const gv = fila.querySelector('.admin-edit-input-visitante').value;
+            const fecha = fila.querySelector('.admin-edit-input-fecha').value;
+            const estadoEl = fila.querySelector('.admin-edit-estado');
+
+            if (gl === '' || gv === '') {
+                estadoEl.textContent = 'Completá ambos marcadores.';
+                estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-live';
+                return;
+            }
+
+            estadoEl.textContent = 'Guardando…';
+            estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-muted';
+
+            fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    accion: 'editarResultado',
+                    pin: ADMIN_PIN_ACTUAL,
+                    datos: {
+                        categoria: p.categoria,
+                        fecha_nro: p.fecha_nro,
+                        id_local: p.id_local,
+                        id_visitante: p.id_visitante,
+                        goles_local: gl,
+                        goles_visitante: gv,
+                        fecha: fecha,
+                    },
+                }),
+            })
+                .then((r) => r.json())
+                .then(async (data) => {
+                    if (!data.ok) throw new Error(data.error);
+                    estadoEl.textContent = '✓ Guardado.';
+                    estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-accent';
+                    await cargarDatos();
+                    renderAdminEditListaPartidos();
+                })
+                .catch((err) => {
+                    estadoEl.textContent = 'Error: ' + err.message;
+                    estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-live';
+                });
+        }
+
+        /* ---------- Ajustar puntos ---------- */
+        function renderAdminAjustarPuntos() {
+            const equiposTemp = filtrarPorTemporada(EQUIPOS);
+            const categorias = ordenarCategorias([...new Set(equiposTemp.map((e) => e.categoria))]);
+
+            document.getElementById('admin-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="renderAdminMenu()" class="text-muted text-sm">←</button>
+      <h2 class="font-display text-base tracking-wide">Ajustar puntos</h2>
+      <span></span>
+    </div>
+    <label class="text-[11px] uppercase text-muted font-semibold">Categoría</label>
+    <select id="admin-pts-sel-categoria" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto">
+      ${categorias.map((c) => `<option value="${c}">${c}</option>`).join('')}
+    </select>
+    <label class="text-[11px] uppercase text-muted font-semibold">Equipo</label>
+    <select id="admin-pts-sel-equipo" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"></select>
+    <label class="text-[11px] uppercase text-muted font-semibold">Puntos a sumar/restar</label>
+    <input type="number" id="admin-pts-input-puntos" placeholder="Ej: -10" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"/>
+    <label class="text-[11px] uppercase text-muted font-semibold">Motivo</label>
+    <input type="text" id="admin-pts-input-motivo" placeholder="Ej: Inclusión indebida" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"/>
+    <button onclick="guardarAjustePuntosAdmin()" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Guardar ajuste</button>
+    <p id="admin-pts-estado" class="text-center text-xs mt-2 min-h-[16px] text-muted"></p>
+  `;
+
+            const selCat = document.getElementById('admin-pts-sel-categoria');
+            const poblarEquipos = () => {
+                const equipos = equiposTemp.filter((e) => e.categoria === selCat.value);
+                document.getElementById('admin-pts-sel-equipo').innerHTML = equipos
+                    .map((e) => `<option value="${e.id_equipo}">${escaparHtml(e.nombre)}</option>`)
+                    .join('');
+            };
+            selCat.onchange = poblarEquipos;
+            poblarEquipos();
+        }
+
+        function guardarAjustePuntosAdmin() {
+            const categoria = document.getElementById('admin-pts-sel-categoria').value;
+            const idEquipo = document.getElementById('admin-pts-sel-equipo').value;
+            const puntos = document.getElementById('admin-pts-input-puntos').value;
+            const motivo = document.getElementById('admin-pts-input-motivo').value;
+            const estadoEl = document.getElementById('admin-pts-estado');
+
+            if (!puntos) {
+                estadoEl.textContent = 'Ingresá la cantidad de puntos.';
+                estadoEl.className = 'text-center text-xs mt-2 text-live';
+                return;
+            }
+
+            estadoEl.textContent = 'Guardando…';
+            estadoEl.className = 'text-center text-xs mt-2 text-muted';
+
+            fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    accion: 'guardarAjustePuntos',
+                    pin: ADMIN_PIN_ACTUAL,
+                    ajuste: { categoria, temporada: TEMPORADA_ACTIVA, id_equipo: idEquipo, puntos, motivo },
+                }),
+            })
+                .then((r) => r.json())
+                .then(async (data) => {
+                    if (!data.ok) throw new Error(data.error);
+                    estadoEl.textContent = '✓ Guardado.';
+                    estadoEl.className = 'text-center text-xs mt-2 text-accent';
+                    await cargarDatos();
+                })
+                .catch((err) => {
+                    estadoEl.textContent = 'Error: ' + err.message;
+                    estadoEl.className = 'text-center text-xs mt-2 text-live';
+                });
         }
 
         function renderAdminJornadas() {
@@ -3240,6 +3601,21 @@
         }
 
         document.addEventListener('click', (e) => {
+            const abrirPerfil = e.target.closest('[data-abrir-perfil]');
+            if (abrirPerfil) {
+                const idDestino = abrirPerfil.dataset.abrirPerfil;
+                if (abrirPerfil.dataset.volverH2h) {
+                    const h2hActual = { ...ULTIMO_H2H };
+                    abrirPerfilConVolver(idDestino, () => abrirModalHistorial(h2hActual.idLocal, h2hActual.idVisitante));
+                } else if (abrirPerfil.dataset.volverForma) {
+                    const idOrigen = abrirPerfil.dataset.volverForma;
+                    abrirPerfilConVolver(idDestino, () => abrirModalEquipo(idOrigen));
+                } else {
+                    abrirPerfilConVolver(idDestino, null);
+                }
+                return;
+            }
+
             const palmaresClub = e.target.closest('[data-palmares-club]');
             if (palmaresClub) { abrirModalPalmares(palmaresClub.dataset.palmaresClub, true); return; }
 
@@ -3326,6 +3702,7 @@
             if (tipo === 'copaplata') {
                 return `<svg class="${base} text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4Z"/><path d="M7 5H4a2 2 0 0 0 0 4h1M17 5h3a2 2 0 0 1 0 4h-1"/></svg>`;
             }
+            if (tipo === 'verano') return '☀️';
             if (tipo === 'ascenso') {
                 return `<svg class="${base} text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
             }
@@ -3548,6 +3925,20 @@
         cargarFavoritos();
         cargarDatos();
     </script>
+
+    <!-- MODAL DE CONFIRMACIÓN AL DESFAVORITEAR -->
+    <div id="modal-confirmar-desfav" class="hidden fixed inset-0 z-[999999] fixed items-center justify-center px-6">
+        <div class="absolute inset-0 bg-black/80"></div>
+        <div class="relative bg-surface border border-borde rounded-3xl p-6 max-w-xs w-full text-center">
+            <p id="confirmar-desfav-texto" class="text-sm text-texto mb-5"></p>
+            <div class="flex gap-2">
+                <button onclick="cerrarConfirmarDesfav()"
+                    class="flex-1 bg-elevado text-texto font-semibold text-sm rounded-xl py-2.5">Cancelar</button>
+                <button onclick="confirmarDesfavorito()"
+                    class="flex-1 bg-live text-white font-semibold text-sm rounded-xl py-2.5">Sacar</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
