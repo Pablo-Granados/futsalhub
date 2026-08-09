@@ -542,6 +542,7 @@
         let SPONSOR_PROGRESO_INTERVALO = null;
         let SPONSOR_PROGRESO_PORCENTAJE = 0;
         let SPONSOR_LISTO = false;
+        let ROTACION_SPONSOR_CARGA = null;
 
         let H2H_HISTORIAL_ACTUAL = [];
         let H2H_PAGINA = 0;
@@ -1131,6 +1132,7 @@
                 document.getElementById('sponsor-grande-link').href = s.link_url || '#';
                 document.getElementById('sponsor-grande-link-visual').href = s.link_url || '#';
                 document.getElementById('sponsor-grande-link').classList.remove('hidden');
+                iniciarRotacionSponsorEnCarga();
             } else {
                 document.getElementById('modal-sponsor-grande').classList.add('hidden');
                 SPONSOR_MODAL_BLOQUEADO = false;
@@ -3823,11 +3825,32 @@
 
             if (SPONSOR_LISTO && SPONSORS.length) {
                 completarSiModalEsperando();
+                iniciarRotacionSponsorEnCarga();
             } else {
                 document.getElementById('sponsor-grande-img').src = '';
                 document.getElementById('sponsor-grande-nombre').textContent = 'Cargando…';
                 document.getElementById('sponsor-grande-link').classList.add('hidden');
             }
+        }
+
+        function iniciarRotacionSponsorEnCarga() {
+            if (ROTACION_SPONSOR_CARGA) { clearInterval(ROTACION_SPONSOR_CARGA); ROTACION_SPONSOR_CARGA = null; }
+            if (SPONSORS.length <= 1) return;
+
+            ROTACION_SPONSOR_CARGA = setInterval(() => {
+                if (!SPONSOR_MODAL_BLOQUEADO) {
+                    clearInterval(ROTACION_SPONSOR_CARGA);
+                    ROTACION_SPONSOR_CARGA = null;
+                    return;
+                }
+                GRANDE_SPONSOR_INDICE = (GRANDE_SPONSOR_INDICE + 1) % SPONSORS.length;
+                const s = SPONSORS[GRANDE_SPONSOR_INDICE];
+                document.getElementById('sponsor-grande-img').src = s.imagen_url || '';
+                document.getElementById('sponsor-grande-img').alt = s.nombre || 'Sponsor';
+                document.getElementById('sponsor-grande-nombre').textContent = s.nombre || 'Sponsor';
+                document.getElementById('sponsor-grande-link').href = s.link_url || '#';
+                document.getElementById('sponsor-grande-link-visual').href = s.link_url || '#';
+            }, 7000);
         }
 
         function iniciarProgresoSponsorSimulado() {
@@ -3889,6 +3912,7 @@
 
         function completarProgresoSponsor() {
             if (SPONSOR_PROGRESO_INTERVALO) { clearInterval(SPONSOR_PROGRESO_INTERVALO); SPONSOR_PROGRESO_INTERVALO = null; }
+            if (ROTACION_SPONSOR_CARGA) { clearInterval(ROTACION_SPONSOR_CARGA); ROTACION_SPONSOR_CARGA = null; }
             SPONSOR_PROGRESO_PORCENTAJE = 100;
             actualizarProgresoSponsorUI();
             setTimeout(() => {
