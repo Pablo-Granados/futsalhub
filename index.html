@@ -348,12 +348,19 @@
             if (!filas.length) return null;
 
             const idsEnTabla = new Set(filas.map((f) => String(f.id)));
-            const desempates = PARTIDOS.filter((p) =>
-                p.categoria === categoria && String(p.temporada) === String(temporada) &&
-                esFaseDesempate(normalizarFase(p.fase)) &&
-                normalizarEstado(p.estado) === 'finalizado' &&
-                idsEnTabla.has(String(p.id_local)) && idsEnTabla.has(String(p.id_visitante))
-            );
+            const esCopaPlataObjetivo = /copa de plata/i.test(fase);
+
+            const desempates = PARTIDOS.filter((p) => {
+                if (p.categoria !== categoria || String(p.temporada) !== String(temporada)) return false;
+                if (normalizarEstado(p.estado) !== 'finalizado') return false;
+                const faseNorm = normalizarFase(p.fase);
+                if (!esFaseDesempate(faseNorm)) return false;
+                // Copa de Plata solo debe tomar desempates "Desempate CP" — nunca los
+                // de ascenso/descenso, aunque compartan equipos con esta tabla.
+                if (esCopaPlataObjetivo && !/^desempate cp/i.test(faseNorm)) return false;
+                if (!idsEnTabla.has(String(p.id_local)) || !idsEnTabla.has(String(p.id_visitante))) return false;
+                return true;
+            });
 
             let campeonId = String(filas[0].id);
             let subcampeonId = filas[1] ? String(filas[1].id) : null;
@@ -1484,7 +1491,7 @@
 
             return `
     <article class="bg-surface border border-borde rounded-2xl px-4 py-3.5 ${clickable ? 'cursor-pointer active:opacity-70' : ''}"
-      ${clickable ? `data-h2h-local="${partido.id_local}" data-h2h-visitante="${partido.id_visitante}"` : ''}>
+      ${clickable ? `data-h2h-local="${partido.id_local}" data-h2h-visitante="${partido.id_visitante}" data-h2h-fecha-nro="${partido.fecha_nro}" data-h2h-temporada="${partido.temporada}"` : ''}>
       <div class="flex items-center justify-between mb-2.5">
         <span class="font-mono text-[11px] text-muted">${escaparHtml(etiquetaIzquierda)}</span>
         ${pill}
@@ -1519,16 +1526,15 @@
         }
 
         function filaCompactaPartido(partido) {
-            const local = equipoInfo(partido.id_local);
-            const visitante = equipoInfo(partido.id_visitante);
-            const estado = normalizarEstado(partido.estado);
-            const mostrarGol = estado !== 'programado';
-            const clickable = partido.id_local != null && partido.id_visitante != null;
+  const local = equipoInfo(partido.id_local);
+  const visitante = equipoInfo(partido.id_visitante);
+  const estado = normalizarEstado(partido.estado);
+  const mostrarGol = estado !== 'programado';
+  const clickable = partido.id_local != null && partido.id_visitante != null;
 
-            return `
+  return `
     <article class="bg-surface border border-borde rounded-2xl px-3 py-3 ${clickable ? 'cursor-pointer active:opacity-70' : ''}"
-      ${clickable ? `data-h2h-local="${partido.id_local}" data-h2h-visitante="${partido.id_visitante}"` : ''}>
-      ${estado === 'vivo' ? `<div class="flex items-center gap-1.5 mb-1.5"><span class="w-1.5 h-1.5 rounded-full bg-live punto-vivo"></span><span class="text-[9px] font-bold text-live uppercase">En vivo</span></div>` : ''}
+      ${clickable ? `data-h2h-local="${partido.id_local}" data-h2h-visitante="${partido.id_visitante}" data-h2h-fecha-nro="${partido.fecha_nro}" data-h2h-temporada="${partido.temporada}"` : ''}>
       <div class="flex items-center gap-2">
         <img src="${local.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(local.nombre)}');" class="w-6 h-6 rounded-full object-cover bg-elevado flex-shrink-0"/>
         <span class="text-xs truncate flex-1">${escaparHtml(local.nombre)}</span>
@@ -1540,7 +1546,7 @@
       </div>
     </article>
   `;
-        }
+}
 
         function pillEstado(estado, fechaTexto) {
             const sufijo = fechaTexto ? ` ${fechaTexto}` : '';
@@ -2225,7 +2231,7 @@
 
         function tarjetaCruce(c) {
             return `
-    <div class="bg-surface border border-borde rounded-xl px-3 py-2.5 cursor-pointer active:opacity-70" data-cruce="${c.claveCruce}">
+    <div class="bg-surface border border-borde rounded-xl px-3 py-2.5" data-cruce="${c.claveCruce}">
       <div class="flex items-center justify-between text-xs mb-1.5">
         <div class="flex items-center gap-1.5 min-w-0 ${c.ganadorA ? '' : c.definido ? 'opacity-60' : ''}">
           <img src="${c.equipoA.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(c.equipoA.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
@@ -2249,6 +2255,10 @@
             const partidos = CRUCES_INDEX.get(clave);
             if (!partidos || !partidos.length) return;
 
+            ULTIMO_VOLVER_CUSTOM = null;
+            PALMARES_VOLVER_MEDALLERO = false;
+            document.getElementById('btn-volver-modal').classList.add('hidden');
+
             const idsEquipos = [...new Set(partidos.flatMap((p) => [String(p.id_local), String(p.id_visitante)]))];
             const equipoRef1 = equipoInfo(idsEquipos[0]);
             const equipoRef2 = equipoInfo(idsEquipos[1]);
@@ -2256,19 +2266,20 @@
 
             document.getElementById('modal-contenido').innerHTML = `
     <div class="flex items-center justify-center gap-4 mb-1">
-      <div class="flex flex-col items-center gap-1.5 w-20">
-        <img src="${equipoRef1.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoRef1.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado"/>
+      <div class="flex flex-col items-center gap-1.5 w-24">
+        <img src="${equipoRef1.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoRef1.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${idsEquipos[0]}" data-volver-cruce="${clave}"/>
         <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoRef1.nombre)}</span>
+        <button onclick='toggleFavoritoTablaPartido(${JSON.stringify(idsEquipos[0])})' class="text-base leading-none">${esFavorito(equipoRef1) ? '⭐' : '☆'}</button>
       </div>
-      
-<div class="flex flex-col items-center flex-shrink-0">
+      <div class="flex flex-col items-center flex-shrink-0">
         ${c.jugados > 0 ? `<span class="font-mono text-lg font-semibold text-texto">${c.golesA} - ${c.golesB}</span>` : ''}
         ${c.totalPartidos > 1 || c.porPenales ? `<span class="text-[9px] text-muted uppercase mt-0.5">global${c.porPenales ? ' · penales' : ''}</span>` : ''}
       </div>
 
-      <div class="flex flex-col items-center gap-1.5 w-20">
-        <img src="${equipoRef2.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoRef2.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado"/>
+      <div class="flex flex-col items-center gap-1.5 w-24">
+        <img src="${equipoRef2.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoRef2.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${idsEquipos[1]}" data-volver-cruce="${clave}"/>
         <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoRef2.nombre)}</span>
+        <button onclick='toggleFavoritoTablaPartido(${JSON.stringify(idsEquipos[1])})' class="text-base leading-none">${esFavorito(equipoRef2) ? '⭐' : '☆'}</button>
       </div>
     </div>
     <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold mb-2 mt-3 text-center">Serie</h3>
@@ -2557,7 +2568,12 @@
       </div>
     </div>
 
-    <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold mb-1">Forma · últimos 5${etiquetaTemporadaForma(forma)}</h3>
+    <div class="flex items-center justify-between mb-1">
+      <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold">Forma · últimos 5${etiquetaTemporadaForma(forma)}</h3>
+      ${forma.length ? `<button onclick='compartirWhatsApp(${JSON.stringify(textoCompartirForma(equipo, forma))})' class="text-muted flex-shrink-0" title="Compartir">
+        ${iconoWhatsApp(16)}
+      </button>` : ''}
+    </div>
     ${forma.length
                     ? `<div class="space-y-2.5 mb-5 mt-2">${forma.map(filaForma).join('')}</div>`
                     : `<p class="text-xs text-muted mb-5">Todavía no hay partidos finalizados para este equipo.</p>`
@@ -2635,62 +2651,81 @@
             toggleFavorito(equipo, () => abrirModalHistorial(ULTIMO_H2H.idLocal, ULTIMO_H2H.idVisitante));
         }
 
-        function abrirModalHistorial(idLocal, idVisitante) {
-            const equipoA = equipoInfo(idLocal);
-            const equipoB = equipoInfo(idVisitante);
-            ULTIMO_H2H = { idLocal, idVisitante };
-            ULTIMO_VOLVER_CUSTOM = null;
-            PALMARES_VOLVER_MEDALLERO = false;
-            document.getElementById('btn-volver-modal').classList.add('hidden');
-            const clubA = claveClub(equipoA);
-            H2H_HISTORIAL_ACTUAL = calcularHistorialH2H(idLocal, idVisitante);
-            H2H_PAGINA = 0;
-
-            let ganoA = 0, ganoB = 0, empates = 0;
-            H2H_HISTORIAL_ACTUAL.forEach((p) => {
-                const aEsLocal = claveClub(equipoInfo(p.id_local)) === clubA;
-                const gA = aEsLocal ? Number(p.goles_local) || 0 : Number(p.goles_visitante) || 0;
-                const gB = aEsLocal ? Number(p.goles_visitante) || 0 : Number(p.goles_local) || 0;
-                if (gA > gB) ganoA++;
-                else if (gA < gB) ganoB++;
-                else empates++;
-            });
-
-            document.getElementById('modal-contenido').innerHTML = `
+        function abrirModalHistorial(idLocal, idVisitante, fechaNro, temporada) {
+    const equipoA = equipoInfo(idLocal);
+    const equipoB = equipoInfo(idVisitante);
+    ULTIMO_H2H = { idLocal, idVisitante };
+    ULTIMO_VOLVER_CUSTOM = null;
+    PALMARES_VOLVER_MEDALLERO = false;
+    document.getElementById('btn-volver-modal').classList.add('hidden');
+    const clubA = claveClub(equipoA);
+    H2H_HISTORIAL_ACTUAL = calcularHistorialH2H(idLocal, idVisitante);
+    H2H_PAGINA = 0;
+    let ganoA = 0, ganoB = 0, empates = 0;
+    H2H_HISTORIAL_ACTUAL.forEach((p) => {
+        const aEsLocal = claveClub(equipoInfo(p.id_local)) === clubA;
+        const gA = aEsLocal ? Number(p.goles_local) || 0 : Number(p.goles_visitante) || 0;
+        const gB = aEsLocal ? Number(p.goles_visitante) || 0 : Number(p.goles_local) || 0;
+        if (gA > gB) ganoA++;
+        else if (gA < gB) ganoB++;
+        else empates++;
+    });
+    const partidoTocado = fechaNro != null
+        ? PARTIDOS.find((p) =>
+            String(p.fecha_nro) === String(fechaNro) &&
+            String(p.temporada) === String(temporada) &&
+            ((String(p.id_local) === String(idLocal) && String(p.id_visitante) === String(idVisitante)) ||
+                (String(p.id_local) === String(idVisitante) && String(p.id_visitante) === String(idLocal)))
+        )
+        : null;
+    const yaFinalizado = partidoTocado && normalizarEstado(partidoTocado.estado) === 'finalizado';
+    const golLocalTocado = partidoTocado && String(partidoTocado.id_local) === String(idLocal) ? partidoTocado.goles_local : partidoTocado?.goles_visitante;
+    const golVisitanteTocado = partidoTocado && String(partidoTocado.id_local) === String(idLocal) ? partidoTocado.goles_visitante : partidoTocado?.goles_local;
+    const encabezadoMarcador = yaFinalizado
+        ? `<span class="font-mono text-lg font-semibold text-texto">${golLocalTocado ?? 0} - ${golVisitanteTocado ?? 0}</span>`
+        : `<span class="font-display text-sm text-muted">VS</span>`;
+    const textoCompartirResultado = partidoTocado
+        ? textoCompartirPartido(partidoTocado)
+        : `⚽ ${equipoA.nombre} vs ${equipoB.nombre}\n\nMirá todo en FutsalHub 👉 ${window.location.href}`;
+    document.getElementById('modal-contenido').innerHTML = `
     <div class="flex items-center justify-center gap-4 mb-2">
       <div class="flex flex-col items-center gap-1.5 w-24">
-        <div class="relative">
-          <img src="${equipoA.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoA.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${equipoA.id_equipo}" data-volver-h2h="1"/>
-        </div>
+        <img src="${equipoA.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoA.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${idLocal}" data-volver-h2h="1"/>
         <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoA.nombre)}</span>
-        <button onclick="toggleFavoritoH2H('${equipoA.id_equipo}')" class="text-lg leading-none">${esFavorito(equipoA) ? '⭐' : '☆'}</button>
+        <button onclick='toggleFavoritoH2H(${JSON.stringify(String(idLocal))})' class="text-lg leading-none">${esFavorito(equipoA) ? '⭐' : '☆'}</button>
       </div>
-      <span class="font-display text-sm text-muted">VS</span>
+      <div class="flex flex-col items-center gap-1 flex-shrink-0">
+        ${encabezadoMarcador}
+        <button onclick='compartirWhatsApp(${JSON.stringify(textoCompartirResultado)})' class="text-muted mt-1" title="Compartir resultado">
+          ${iconoWhatsApp(16)}
+        </button>
+      </div>
       <div class="flex flex-col items-center gap-1.5 w-24">
-        <img src="${equipoB.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoB.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${equipoB.id_equipo}" data-volver-h2h="1"/>
+        <img src="${equipoB.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoB.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${idVisitante}" data-volver-h2h="1"/>
         <span class="text-[11px] text-center leading-tight">${escaparHtml(equipoB.nombre)}</span>
-        <button onclick="toggleFavoritoH2H('${equipoB.id_equipo}')" class="text-lg leading-none">${esFavorito(equipoB) ? '⭐' : '☆'}</button>
+        <button onclick='toggleFavoritoH2H(${JSON.stringify(String(idVisitante))})' class="text-lg leading-none">${esFavorito(equipoB) ? '⭐' : '☆'}</button>
       </div>
     </div>
-
     <p class="text-center text-[10px] text-muted uppercase tracking-wide mb-5">${escaparHtml(equipoA.categoria || '')}</p>
-
     ${H2H_HISTORIAL_ACTUAL.length ? `
       <div class="flex justify-center gap-6 mb-5 text-center">
         <div><p class="font-mono text-lg font-semibold text-accent">${ganoA}</p><p class="text-[10px] text-muted uppercase">Ganó ${escaparHtml(equipoA.nombre)}</p></div>
         <div><p class="font-mono text-lg font-semibold text-warning">${empates}</p><p class="text-[10px] text-muted uppercase">Empates</p></div>
         <div><p class="font-mono text-lg font-semibold text-live">${ganoB}</p><p class="text-[10px] text-muted uppercase">Ganó ${escaparHtml(equipoB.nombre)}</p></div>
       </div>
-      <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold mb-2">Historial de enfrentamientos</h3>
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold">Historial de enfrentamientos</h3>
+        <button onclick='compartirWhatsApp(${JSON.stringify(`📊 Historial ${equipoA.nombre} vs ${equipoB.nombre}: ${ganoA} victorias de ${equipoA.nombre}, ${empates} empates, ${ganoB} victorias de ${equipoB.nombre}.\n\nVer todo 👉 ` + window.location.href)})' class="text-muted flex-shrink-0" title="Compartir historial">
+          ${iconoWhatsApp(15)}
+        </button>
+      </div>
       <div id="h2h-lista"></div>
-
       <div id="h2h-paginacion" class="flex items-center justify-between mt-3"></div>
     ` : `<p class="text-xs text-muted text-center py-6">Todavía no se enfrentaron en esta categoría.</p>`}
   `;
-            document.getElementById('modal-equipo').classList.remove('hidden');
-
-            if (H2H_HISTORIAL_ACTUAL.length) renderPaginaHistorial();
-        }
+    document.getElementById('modal-equipo').classList.remove('hidden');
+    if (H2H_HISTORIAL_ACTUAL.length) renderPaginaHistorial();
+}
 
         function paginarHtml(lista, pagina, renderItem, idPrefijo) {
             const totalPaginas = Math.max(1, Math.ceil(lista.length / FAVORITOS_POR_PAGINA));
@@ -2856,8 +2891,7 @@
         }
 
         function toggleFavoritoClick() {
-            toggleFavorito(CLUB_PERFIL_ACTUAL);
-            renderModalPerfilEquipo();
+            toggleFavorito(CLUB_PERFIL_ACTUAL, () => renderModalPerfilEquipo());
         }
 
 
@@ -2924,6 +2958,9 @@
         <h2 class="font-display text-xl tracking-wide truncate">${escaparHtml(referencia.nombre)}</h2>
         <span class="text-[11px] text-muted uppercase tracking-wide">${escaparHtml(etiquetaCategoria)}</span>
       </div>
+      <button onclick='compartirWhatsApp(${JSON.stringify(textoCompartirEstadisticas(referencia, etiquetaCategoria, d))})' class="text-muted">
+  ${iconoWhatsApp(16)}
+</button>
       <button onclick="toggleFavoritoClick()" title="Marcar favorito" class="text-2xl flex-shrink-0 leading-none">${esFavorito(CLUB_PERFIL_ACTUAL) ? '⭐' : '☆'}</button>
     </div>
 
@@ -3628,6 +3665,11 @@
                 } else if (abrirPerfil.dataset.volverForma) {
                     const idOrigen = abrirPerfil.dataset.volverForma;
                     abrirPerfilConVolver(idDestino, () => abrirModalEquipo(idOrigen));
+                } else if (abrirPerfil.dataset.volverCruce) {
+                    const claveCruce = abrirPerfil.dataset.volverCruce;
+                    abrirPerfilConVolver(idDestino, () => abrirModalCruceDetalle(claveCruce));
+                } else if (abrirPerfil.dataset.volverTablaPartido) {
+                    abrirModalPerfilEquipo(idDestino);
                 } else {
                     abrirPerfilConVolver(idDestino, null);
                 }
@@ -3645,7 +3687,7 @@
             if (toggle) { e.stopPropagation(); toggleCategoriaPerfil(toggle.dataset.toggleCategoria); return; }
 
             const h2h = e.target.closest('[data-h2h-local]');
-            if (h2h) { abrirModalHistorial(h2h.dataset.h2hLocal, h2h.dataset.h2hVisitante); return; }
+            if (h2h) { abrirModalHistorial(h2h.dataset.h2hLocal, h2h.dataset.h2hVisitante, h2h.dataset.h2hFechaNro, h2h.dataset.h2hTemporada); return; }
 
             const perfil = e.target.closest('[data-equipo-perfil]');
             if (perfil) { abrirModalPerfilEquipo(perfil.dataset.equipoPerfil); return; }
@@ -3711,6 +3753,63 @@
             const div = document.createElement('div');
             div.textContent = str ?? '';
             return div.innerHTML;
+        }
+
+        function compartirWhatsApp(texto) {
+            const url = 'https://wa.me/?text=' + encodeURIComponent(texto);
+            window.open(url, '_blank');
+        }
+
+        function iconoWhatsApp(tamano) {
+            const t = tamano || 16;
+            return `<svg width="${t}" height="${t}" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2m0 1.67c2.24 0 4.35.87 5.94 2.46a8.24 8.24 0 0 1 2.43 5.88c0 4.59-3.74 8.33-8.33 8.33a8.3 8.3 0 0 1-4.24-1.16l-.3-.18-3.12.82.83-3.04-.2-.31a8.26 8.26 0 0 1-1.27-4.42c0-4.59 3.74-8.33 8.33-8.33Zm-3.13 4.02c-.16 0-.42.06-.64.31-.22.25-.85.83-.85 2.03 0 1.2.87 2.35.99 2.51.12.16 1.71 2.71 4.21 3.71.59.24 1.05.38 1.41.48.59.17 1.13.14 1.55.09.47-.07 1.46-.6 1.67-1.18.21-.58.21-1.07.14-1.18-.07-.11-.24-.17-.5-.3-.26-.13-1.53-.75-1.77-.84-.24-.09-.41-.13-.58.13-.17.26-.66.84-.81 1.01-.15.17-.3.19-.55.06-.26-.13-1.09-.4-2.08-1.28-.77-.68-1.29-1.53-1.44-1.79-.15-.26-.02-.4.11-.53.12-.12.26-.3.39-.45.13-.15.17-.26.26-.43.09-.17.04-.32-.02-.45-.06-.13-.58-1.4-.8-1.92-.21-.5-.42-.43-.58-.44h-.5Z"/></svg>`;
+        }
+
+        function textoCompartirPartido(partido) {
+            const local = equipoInfo(partido.id_local);
+            const visitante = equipoInfo(partido.id_visitante);
+            const estado = normalizarEstado(partido.estado);
+            const fechaTexto = formatearFechaNumerica(partido.fecha);
+            const etiquetaFecha = etiquetaJornadaPartido(partido);
+
+            if (estado === 'finalizado') {
+                return `⚽ ${local.nombre} ${partido.goles_local}-${partido.goles_visitante} ${visitante.nombre}\n` +
+                    `${etiquetaFecha} - ${partido.categoria}${fechaTexto ? ' - ' + fechaTexto : ''}\n\n` +
+                    `Mirá todos los resultados en FutsalHub 👉 ${window.location.href}`;
+            }
+
+            const historial = calcularHistorialH2H(partido.id_local, partido.id_visitante);
+            const clubLocal = claveClub(local);
+            let ganoLocal = 0, ganoVisitante = 0, empates = 0;
+            historial.forEach((p) => {
+                const aEsLocal = claveClub(equipoInfo(p.id_local)) === clubLocal;
+                const gA = aEsLocal ? Number(p.goles_local) || 0 : Number(p.goles_visitante) || 0;
+                const gB = aEsLocal ? Number(p.goles_visitante) || 0 : Number(p.goles_local) || 0;
+                if (gA > gB) ganoLocal++;
+                else if (gA < gB) ganoVisitante++;
+                else empates++;
+            });
+            const resumenHistorial = historial.length
+                ? `\n📊 Historial: ${ganoLocal} ${local.nombre} - ${empates} empates - ${ganoVisitante} ${visitante.nombre}`
+                : '';
+
+            return `⚽ ${local.nombre} vs ${visitante.nombre}\n` +
+                `${etiquetaFecha} - ${partido.categoria}${fechaTexto ? ' - ' + fechaTexto : ''}${resumenHistorial}\n\n` +
+                `Seguí el partido en FutsalHub 👉 ${window.location.href}`;
+        }
+
+        function textoCompartirForma(equipo, forma) {
+            const lineas = forma.map((f) => `${f.resultado} ${f.propios}-${f.rivalGoles} vs ${f.rival.nombre}`).join('\n');
+            return `📋 Últimos 5 de ${equipo.nombre}:\n${lineas}\n\nMirá todo en FutsalHub 👉 ${window.location.href}`;
+        }
+
+        function textoCompartirEstadisticas(equipo, etiquetaCategoria, d) {
+            return `📊 ${equipo.nombre} — ${etiquetaCategoria}\n\n` +
+                `PJ: ${d.pj}  PG: ${d.pg}  PE: ${d.pe}  PP: ${d.pp}\n` +
+                `GF: ${d.gf}  GC: ${d.gc}\n` +
+                `Goles a favor/partido: ${d.promedioGF.toFixed(1)}\n` +
+                `Goles en contra/partido: ${d.promedioGC.toFixed(1)}\n\n` +
+                `Mirá todo en FutsalHub 👉 ${window.location.href}`;
         }
 
         function iconoPalmares(tipo) {
