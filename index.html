@@ -193,6 +193,17 @@
                     </svg>
                     <span class="text-[10px] font-semibold uppercase tracking-wide">Equipos</span>
                 </button>
+                <button data-vista="comunidad"
+                    class="btn-nav text-muted flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    <span class="text-[10px] font-semibold uppercase tracking-wide">Comunidad</span>
+                </button>
             </div>
         </nav>
     </div>
@@ -993,6 +1004,7 @@
             const { equipos, partidos, jugadores } = data;
             CAMPEONES_MANUAL = data.campeonesManual || [];
             AJUSTES_PUNTOS = data.ajustesPuntos || [];
+            PRODE_DATOS = data.prode || [];
             EQUIPOS = equipos;
             EQUIPOS_POR_ID = new Map(equipos.map((eq) => [String(eq.id_equipo), eq]));
             PARTIDOS = partidos;
@@ -1225,6 +1237,7 @@
         let VISTA_ANTERIOR = null;
         let CAMPEONES_TEMPORADA = {};
         let CAMPEONES_MANUAL = [];
+        let PRODE_DATOS = [];
         let AJUSTES_PUNTOS = [];
         let DESEMPATES_TEMPORADA = {};
         window.ARF_RESULTADOS = { campeones: CAMPEONES_TEMPORADA, desempates: DESEMPATES_TEMPORADA };
@@ -1286,6 +1299,40 @@
             if (VISTA_ACTIVA === 'partidos') renderPartidos();
             else if (VISTA_ACTIVA === 'tabla') renderTabla();
             else if (VISTA_ACTIVA === 'equipos') renderEquipos();
+            else if (VISTA_ACTIVA === 'comunidad') renderComunidad();
+        }
+
+        function renderComunidad() {
+            document.getElementById('vista-contenido').innerHTML = `
+    <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2">🏘️ Comunidad</h3>
+    ${bloqueCardProde()}
+    <p class="text-center text-muted text-sm py-16">Videos, noticias y más — en construcción.</p>
+  `;
+        }
+
+        function obtenerJornadaProdeActual() {
+            const partidosPrimeraA = filtrarPorTemporada(PARTIDOS).filter(
+                (p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular'
+            );
+            const jornadas = obtenerJornadasDisponibles(partidosPrimeraA);
+            if (!jornadas.length) return null;
+            return elegirJornadaPorDefecto(jornadas, partidosPrimeraA);
+        }
+
+        function bloqueCardProde() {
+            const jornada = obtenerJornadaProdeActual();
+            if (jornada == null) return '';
+
+            return `
+    <button onclick="abrirProde()" class="w-full bg-surface border border-borde rounded-2xl p-4 flex items-center gap-3 mb-4 text-left">
+      <span class="text-3xl">🎯</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-texto">El Prode — Fecha ${jornada}</p>
+        <p class="text-xs text-muted">Predecí los resultados de Primera A y competí en el ranking</p>
+      </div>
+      <span class="text-muted">→</span>
+    </button>
+  `;
         }
 
         /* ============================================================
@@ -2391,6 +2438,693 @@
 
         let CLUB_PENDIENTE_DESFAV = null;
 
+        let DISPOSITIVO_ID = null;
+        let NOMBRE_USUARIO = null;
+
+        function obtenerDispositivoId() {
+            try {
+                let id = localStorage.getItem('prode_dispositivo_id');
+                if (!id) {
+                    id = 'd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+                    localStorage.setItem('prode_dispositivo_id', id);
+                }
+                return id;
+            } catch (e) {
+                return 'd_' + Date.now();
+            }
+        }
+
+        function obtenerNombreUsuario() {
+            try {
+                return localStorage.getItem('prode_nombre') || null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function guardarNombreUsuario(nombre) {
+            try { localStorage.setItem('prode_nombre', nombre); } catch (e) { }
+            NOMBRE_USUARIO = nombre;
+        }
+
+        let CLUB_USUARIO = null;
+
+        function obtenerClubUsuario() {
+            try { return localStorage.getItem('prode_club') || null; } catch (e) { return null; }
+        }
+
+        function guardarClubUsuario(club) {
+            try { localStorage.setItem('prode_club', club); } catch (e) { }
+            CLUB_USUARIO = club;
+        }
+
+        function inicializarIdentidadProde() {
+            DISPOSITIVO_ID = obtenerDispositivoId();
+            NOMBRE_USUARIO = obtenerNombreUsuario();
+            CLUB_USUARIO = obtenerClubUsuario();
+        }
+
+        function pedirNombreSiHaceFalta(callback) {
+            if (NOMBRE_USUARIO && CLUB_USUARIO) { callback(); return; }
+
+            const opcionesClub = obtenerClubsUnicos()
+                .map((e) => `<option value="${escaparHtml(e.nombre)}">${escaparHtml(e.nombre)}</option>`)
+                .join('');
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-1">¿Cómo te llamás?</h2>
+    <p class="text-xs text-muted mb-4">Para poder mostrarte en el ranking del Prode.</p>
+    <input id="input-nombre-prode" type="text" placeholder="Nombre y apellido" value="${escaparHtml(NOMBRE_USUARIO || '')}" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
+    <label class="text-[11px] uppercase text-muted font-semibold">¿De qué club sos hincha?</label>
+    <select id="input-club-prode" class="w-full mt-1.5 bg-elevado border border-borde rounded-xl p-3 text-sm text-texto mb-3">
+      <option value="">Elegí tu club</option>
+      ${opcionesClub}
+    </select>
+    <label class="text-[11px] uppercase text-muted font-semibold">Mail (opcional, para recuperar tu cuenta)</label>
+    <input id="input-email-prode" type="email" placeholder="tu@mail.com" class="w-full mt-1.5 bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
+    <button id="btn-confirmar-nombre" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Confirmar</button>
+    <button onclick="mostrarRecuperarCodigo()" class="w-full text-center text-[11px] font-semibold text-accent uppercase tracking-wide mt-3 py-1">¿Ya jugaste antes? Recuperar cuenta</button>
+    <p id="error-nombre-prode" class="text-center text-xs text-live mt-2 min-h-[16px]"></p>
+  `;
+            document.getElementById('modal-equipo').classList.remove('hidden');
+
+            document.getElementById('btn-confirmar-nombre').onclick = () => {
+                const nombre = document.getElementById('input-nombre-prode').value.trim();
+                const club = document.getElementById('input-club-prode').value;
+                const email = document.getElementById('input-email-prode').value.trim();
+                if (nombre.length < 3) {
+                    document.getElementById('error-nombre-prode').textContent = 'Ingresá tu nombre y apellido.';
+                    return;
+                }
+                if (!club) {
+                    document.getElementById('error-nombre-prode').textContent = 'Elegí tu club.';
+                    return;
+                }
+
+                document.getElementById('error-nombre-prode').textContent = 'Guardando…';
+                fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ accion: 'registrarUsuarioProde', datos: { dispositivo_id: DISPOSITIVO_ID, nombre_apellido: nombre, club_hincha: club, email: email || null } }),
+                })
+                    .then((r) => r.json())
+                    .then((data) => {
+                        guardarNombreUsuario(nombre);
+                        guardarClubUsuario(club);
+                        if (data.ok && data.resultado && data.resultado.codigo) {
+                            mostrarCodigoGenerado(data.resultado.codigo, callback);
+                        } else {
+                            callback();
+                        }
+                    })
+                    .catch(() => {
+                        // Si falla el registro del código, igual dejamos predecir — no es bloqueante.
+                        guardarNombreUsuario(nombre);
+                        guardarClubUsuario(club);
+                        callback();
+                    });
+            };
+        }
+
+        function mostrarCodigoGenerado(codigo, callback) {
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-1">¡Listo! Guardá tu código</h2>
+    <p class="text-xs text-muted mb-4">Si algún día perdés tu historial (cambio de celular, borrado de caché), usá este código para recuperarlo.</p>
+    <div class="bg-elevado border border-accent rounded-xl py-4 text-center mb-4">
+      <span class="font-mono text-2xl font-bold text-accent tracking-widest">${escaparHtml(codigo)}</span>
+    </div>
+    <button onclick="continuarLuegoDeCodigo()" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Entendido, seguir</button>
+  `;
+            window._prodeCallbackPendiente = callback;
+        }
+
+        function continuarLuegoDeCodigo() {
+            if (window._prodeCallbackPendiente) window._prodeCallbackPendiente();
+        }
+
+        function mostrarRecuperarCodigo() {
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-1">Recuperar cuenta</h2>
+    <p class="text-xs text-muted mb-4">Ingresá el código que guardaste (o que te llegó por mail).</p>
+    <input id="input-codigo-recuperar" type="text" placeholder="Ej: A3F7K9" maxlength="6" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3 uppercase tracking-widest text-center font-mono"/>
+    <button id="btn-recuperar-codigo" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Recuperar</button>
+    <p id="error-recuperar-prode" class="text-center text-xs text-live mt-2 min-h-[16px]"></p>
+  `;
+
+            document.getElementById('btn-recuperar-codigo').onclick = () => {
+                const codigo = document.getElementById('input-codigo-recuperar').value.trim();
+                const estadoEl = document.getElementById('error-recuperar-prode');
+                if (!codigo) { estadoEl.textContent = 'Ingresá el código.'; return; }
+
+                estadoEl.textContent = 'Buscando…';
+                fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ accion: 'recuperarUsuarioProde', codigo: codigo }),
+                })
+                    .then((r) => r.json())
+                    .then((data) => {
+                        if (!data.ok) throw new Error(data.error);
+                        const u = data.resultado;
+                        DISPOSITIVO_ID = String(u.dispositivo_id);
+                        try { localStorage.setItem('prode_dispositivo_id', DISPOSITIVO_ID); } catch (e) { }
+                        guardarNombreUsuario(u.nombre_apellido);
+                        guardarClubUsuario(u.club_hincha);
+                        estadoEl.textContent = '✓ Cuenta recuperada.';
+                        estadoEl.className = 'text-center text-xs mt-2 text-accent';
+                        setTimeout(() => abrirProde(), 800);
+                    })
+                    .catch((err) => {
+                        estadoEl.textContent = err.message;
+                        estadoEl.className = 'text-center text-xs mt-2 text-live';
+                    });
+            };
+        }
+
+        function abrirProde() {
+            pedirNombreSiHaceFalta(() => {
+                renderFormularioProde();
+                document.getElementById('modal-equipo').classList.remove('hidden');
+            });
+        }
+
+        let PRODE_JORNADA_SELECCIONADA = null;
+
+        function obtenerJornadasProdeDisponibles() {
+            const partidos = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular');
+            const jornadas = obtenerJornadasDisponibles(partidos);
+            // Solo jornadas que tengan al menos un partido no finalizado.
+            return jornadas.filter((j) =>
+                partidos.some((p) => Number(p.fecha_nro) === j && normalizarEstado(p.estado) !== 'finalizado')
+            );
+        }
+
+        function renderFormularioProde() {
+            const jornadasDisponibles = obtenerJornadasProdeDisponibles();
+
+            if (!jornadasDisponibles.length) {
+                document.getElementById('modal-contenido').innerHTML = `<p class="text-center text-muted text-sm py-8">No hay partidos de Primera A pendientes para predecir por ahora.</p>`;
+                return;
+            }
+
+            if (PRODE_JORNADA_SELECCIONADA == null || !jornadasDisponibles.includes(PRODE_JORNADA_SELECCIONADA)) {
+                PRODE_JORNADA_SELECCIONADA = obtenerJornadaProdeActual();
+                if (!jornadasDisponibles.includes(PRODE_JORNADA_SELECCIONADA)) PRODE_JORNADA_SELECCIONADA = jornadasDisponibles[0];
+            }
+
+            const partidos = filtrarPorTemporada(PARTIDOS).filter(
+                (p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular' &&
+                    Number(p.fecha_nro) === PRODE_JORNADA_SELECCIONADA &&
+                    normalizarEstado(p.estado) !== 'finalizado'
+            );
+
+            const misPredicciones = new Map();
+            (PRODE_DATOS || []).forEach((pr) => {
+                if (String(pr.dispositivo_id) === String(DISPOSITIVO_ID) && Number(pr.fecha_nro) === PRODE_JORNADA_SELECCIONADA) {
+                    misPredicciones.set(String(pr.id_local) + '_' + String(pr.id_visitante), pr);
+                }
+            });
+
+            const filasHtml = partidos.length ? partidos.map((p) => {
+                const local = equipoInfo(p.id_local);
+                const visitante = equipoInfo(p.id_visitante);
+                const clave = String(p.id_local) + '_' + String(p.id_visitante);
+                const previa = misPredicciones.get(clave);
+                const cerrado = !seAceptaPrediccion(p);
+                const bloqueadaParaEditar = previa && !PRODE_EDITANDO.has(clave);
+
+                return `
+      <div class="rounded-xl p-3 mb-2 transition-colors ${bloqueadaParaEditar ? 'bg-cancha opacity-60' : 'bg-elevado'}" data-prode-partido='${JSON.stringify({ id_local: p.id_local, id_visitante: p.id_visitante, fecha_nro: p.fecha_nro, clave })}'>
+        <div class="flex items-center justify-between text-xs mb-2 gap-2">
+          <span class="truncate flex-1">${escaparHtml(local.nombre)}</span>
+          <span class="truncate flex-1 text-right">${escaparHtml(visitante.nombre)}</span>
+        </div>
+        <div class="flex items-center justify-center gap-2">
+          <input type="number" min="0" class="prode-input-local w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_local : ''}" ${cerrado || bloqueadaParaEditar ? 'disabled' : ''}/>
+          <span class="text-muted text-sm">—</span>
+          <input type="number" min="0" class="prode-input-visitante w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_visitante : ''}" ${cerrado || bloqueadaParaEditar ? 'disabled' : ''}/>
+          ${previa && !cerrado
+                        ? (bloqueadaParaEditar
+                            ? `<button onclick='toggleEditarPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Editar">✏️</button>`
+                            : `<button onclick='guardarUnaPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Guardar">💾</button>`)
+                        : ''}
+        </div>
+        ${previa && bloqueadaParaEditar ? `<p class="text-[10px] text-accent text-center mt-1.5">✓ Ya predijiste — tocá ✏️ para editar</p>` : ''}
+        ${previa && !bloqueadaParaEditar ? `<p class="text-[10px] text-warning text-center mt-1.5">Editando…</p>` : ''}
+        ${!previa && cerrado ? `<p class="text-[10px] text-live text-center mt-1.5">Cerrado — ya pasó el horario límite</p>` : ''}
+      </div>
+    `;
+            }).join('') : `<p class="text-center text-muted text-sm py-6">No quedan partidos pendientes en esta fecha.</p>`;
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="font-display text-lg tracking-wide">🎯 Prode</h2>
+      <div class="flex items-center gap-3">
+        <button onclick='compartirWhatsApp(${JSON.stringify(textoCompartirProde())})' class="text-muted" title="Invitar por WhatsApp">${iconoWhatsApp(16)}</button>
+        <button onclick="abrirRankingProde()" class="text-[11px] font-semibold text-accent uppercase tracking-wide">Ver ranking</button>
+      </div>
+    </div>
+    <p class="text-xs text-muted mb-3">${escaparHtml(NOMBRE_USUARIO)}</p>
+    <button onclick="toggleSelectorJornadaProde()" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2.5 text-sm font-semibold text-texto mb-1 flex items-center justify-between">
+      <span>Fecha ${PRODE_JORNADA_SELECCIONADA}</span>
+      <span class="text-muted">▾</span>
+    </button>
+    <div id="lista-jornadas-prode" class="hidden bg-elevado border border-borde rounded-xl mb-3 overflow-y-auto" style="max-height: 178px;">
+      ${jornadasDisponibles.map((j) => `
+        <button onclick="elegirJornadaProde(${j})" class="w-full text-left px-3 py-2 text-sm ${j === PRODE_JORNADA_SELECCIONADA ? 'text-accent font-semibold' : 'text-texto'} border-b border-borde last:border-0">Fecha ${j}</button>
+      `).join('')}
+    </div>
+    ${filasHtml}
+    <button onclick="guardarPrediccionesProde()" class="w-full mt-2 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Guardar predicciones</button>
+    <p id="prode-estado" class="text-center text-xs mt-2 min-h-[16px] text-muted"></p>
+  `;
+        }
+
+        function toggleEditarPrediccion(clave) {
+            if (PRODE_EDITANDO.has(clave)) PRODE_EDITANDO.delete(clave);
+            else PRODE_EDITANDO.add(clave);
+            renderFormularioProde();
+        }
+
+        function toggleSelectorJornadaProde() {
+            document.getElementById('lista-jornadas-prode').classList.toggle('hidden');
+        }
+
+        function elegirJornadaProde(jornada) {
+            PRODE_JORNADA_SELECCIONADA = jornada;
+            renderFormularioProde();
+        }
+
+        function seAceptaPrediccion(partido) {
+            if (normalizarEstado(partido.estado) === 'finalizado') return false;
+            if (!partido.fecha) return true;
+
+            const hoyStr = new Date().toISOString().slice(0, 10);
+            if (partido.fecha < hoyStr) return false;
+            if (partido.fecha > hoyStr) return true;
+
+            // Es el mismo día — se acepta hasta las 18hs, según la hora local del navegador
+            // (el servidor vuelve a validar esto en serio antes de guardar).
+            return new Date().getHours() < 18;
+        }
+
+        function guardarPrediccionesProde() {
+            const contenedor = document.getElementById('modal-contenido');
+            const filas = contenedor.querySelectorAll('[data-prode-partido]');
+            const estadoEl = document.getElementById('prode-estado');
+
+            const paraEnviar = [];
+            filas.forEach((fila) => {
+                const info = JSON.parse(fila.dataset.prodePartido);
+                const gl = fila.querySelector('.prode-input-local');
+                const gv = fila.querySelector('.prode-input-visitante');
+                if (gl.disabled || gv.disabled) return;
+                if (gl.value === '' || gv.value === '') return;
+                paraEnviar.push({ ...info, pred_goles_local: gl.value, pred_goles_visitante: gv.value });
+            });
+
+            if (!paraEnviar.length) {
+                estadoEl.textContent = 'Completá al menos un partido.';
+                estadoEl.className = 'text-center text-xs mt-2 text-live';
+                return;
+            }
+
+            estadoEl.textContent = `Guardando ${paraEnviar.length} predicción(es)…`;
+            estadoEl.className = 'text-center text-xs mt-2 text-muted';
+
+            const temporada = TEMPORADA_ACTIVA;
+            const enviarUno = (p) => fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    accion: 'guardarPrediccion',
+                    datos: {
+                        nombre_apellido: NOMBRE_USUARIO,
+                        club_hincha: CLUB_USUARIO,
+                        dispositivo_id: DISPOSITIVO_ID,
+                        temporada: temporada,
+                        fecha_nro: p.fecha_nro,
+                        id_local: p.id_local,
+                        id_visitante: p.id_visitante,
+                        pred_goles_local: p.pred_goles_local,
+                        pred_goles_visitante: p.pred_goles_visitante,
+                    },
+                }),
+            }).then((r) => r.json());
+
+            Promise.all(paraEnviar.map(enviarUno))
+                .then((resultados) => {
+                    const fallos = resultados.filter((r) => !r.ok);
+                    if (fallos.length) {
+                        estadoEl.textContent = `⚠️ ${fallos.length} predicción(es) no se pudieron guardar: ${fallos[0].error}`;
+                        estadoEl.className = 'text-center text-xs mt-2 text-live';
+                    } else {
+                        estadoEl.textContent = '✓ Predicciones guardadas.';
+                        estadoEl.className = 'text-center text-xs mt-2 text-accent';
+                    }
+
+                    // Actualiza PRODE_DATOS en memoria al instante con lo que se acaba
+                    // de enviar, sin esperar al servidor — así se ve reflejado ya mismo.
+                    paraEnviar.forEach((p) => {
+                        const idx = PRODE_DATOS.findIndex((pr) =>
+                            String(pr.dispositivo_id) === String(DISPOSITIVO_ID) &&
+                            String(pr.fecha_nro) === String(p.fecha_nro) &&
+                            String(pr.id_local) === String(p.id_local) &&
+                            String(pr.id_visitante) === String(p.id_visitante)
+                        );
+                        const registro = {
+                            nombre_apellido: NOMBRE_USUARIO,
+                            club_hincha: CLUB_USUARIO,
+                            dispositivo_id: DISPOSITIVO_ID,
+                            categoria: 'Primera A',
+                            temporada: TEMPORADA_ACTIVA,
+                            fecha_nro: p.fecha_nro,
+                            id_local: p.id_local,
+                            id_visitante: p.id_visitante,
+                            pred_goles_local: p.pred_goles_local,
+                            pred_goles_visitante: p.pred_goles_visitante,
+                        };
+                        if (idx !== -1) PRODE_DATOS[idx] = registro;
+                        else PRODE_DATOS.push(registro);
+                    });
+
+                    PRODE_EDITANDO.clear();
+                    renderFormularioProde();
+
+                    // Sincroniza con el servidor en segundo plano, sin bloquear la vista.
+                    cargarDatos();
+                })
+                .catch((err) => {
+                    estadoEl.textContent = 'Error: ' + err.message;
+                    estadoEl.className = 'text-center text-xs mt-2 text-live';
+                });
+        }
+
+        function guardarUnaPrediccion(clave) {
+            const cont = document.getElementById('modal-contenido');
+            const fila = Array.from(cont.querySelectorAll('[data-prode-partido]')).find((f) => {
+                const info = JSON.parse(f.dataset.prodePartido);
+                return info.clave === clave;
+            });
+            if (!fila) return;
+
+            const info = JSON.parse(fila.dataset.prodePartido);
+            const gl = fila.querySelector('.prode-input-local').value;
+            const gv = fila.querySelector('.prode-input-visitante').value;
+
+            if (gl === '' || gv === '') return;
+
+            fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    accion: 'guardarPrediccion',
+                    datos: {
+                        nombre_apellido: NOMBRE_USUARIO,
+                        club_hincha: CLUB_USUARIO,
+                        dispositivo_id: DISPOSITIVO_ID,
+                        temporada: TEMPORADA_ACTIVA,
+                        fecha_nro: info.fecha_nro,
+                        id_local: info.id_local,
+                        id_visitante: info.id_visitante,
+                        pred_goles_local: gl,
+                        pred_goles_visitante: gv,
+                    },
+                }),
+            })
+                .then((r) => r.json())
+                .then((data) => {
+                    if (!data.ok) throw new Error(data.error);
+
+                    const idx = PRODE_DATOS.findIndex((pr) =>
+                        String(pr.dispositivo_id) === String(DISPOSITIVO_ID) &&
+                        String(pr.fecha_nro) === String(info.fecha_nro) &&
+                        String(pr.id_local) === String(info.id_local) &&
+                        String(pr.id_visitante) === String(info.id_visitante)
+                    );
+                    const registro = {
+                        nombre_apellido: NOMBRE_USUARIO, club_hincha: CLUB_USUARIO, dispositivo_id: DISPOSITIVO_ID,
+                        categoria: 'Primera A', temporada: TEMPORADA_ACTIVA, fecha_nro: info.fecha_nro,
+                        id_local: info.id_local, id_visitante: info.id_visitante,
+                        pred_goles_local: gl, pred_goles_visitante: gv,
+                    };
+                    if (idx !== -1) PRODE_DATOS[idx] = registro;
+                    else PRODE_DATOS.push(registro);
+
+                    PRODE_EDITANDO.delete(clave);
+                    renderFormularioProde();
+                    cargarDatos();
+                })
+                .catch((err) => {
+                    const estadoEl = document.getElementById('prode-estado');
+                    if (estadoEl) {
+                        estadoEl.textContent = 'Error: ' + err.message;
+                        estadoEl.className = 'text-center text-xs mt-2 text-live';
+                    }
+                });
+        }
+
+        let PRODE_RANKING_VISTA = 'fecha';
+        let PRODE_RANKING_JORNADA = null;
+        let PRODE_RANKING_PAGINA = 0;
+        let PRODE_DETALLE_PAGINA = 0;
+        let PRODE_EDITANDO = new Set();
+        const PRODE_POR_PAGINA = 8;
+
+        function calcularPuntajePrediccion(pred, partido) {
+            if (!partido || normalizarEstado(partido.estado) !== 'finalizado') return null;
+
+            const golLocalReal = Number(partido.goles_local) || 0;
+            const golVisitanteReal = Number(partido.goles_visitante) || 0;
+            const golLocalPred = Number(pred.pred_goles_local) || 0;
+            const golVisitantePred = Number(pred.pred_goles_visitante) || 0;
+
+            if (golLocalPred === golLocalReal && golVisitantePred === golVisitanteReal) return 3;
+
+            const signo = (a, b) => (a > b ? 1 : a < b ? -1 : 0);
+            if (signo(golLocalPred, golVisitantePred) === signo(golLocalReal, golVisitanteReal)) return 1;
+
+            return 0;
+        }
+
+        function calcularRankingProde(soloJornada) {
+            const partidosPrimeraA = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular');
+            const porPartido = new Map();
+            partidosPrimeraA.forEach((p) => {
+                porPartido.set(String(p.id_local) + '_' + String(p.id_visitante) + '_' + p.fecha_nro, p);
+            });
+
+            const porPersona = new Map();
+            (PRODE_DATOS || []).forEach((pr) => {
+                if (soloJornada != null && Number(pr.fecha_nro) !== soloJornada) return;
+
+                const clave = String(pr.id_local) + '_' + String(pr.id_visitante) + '_' + pr.fecha_nro;
+                const partido = porPartido.get(clave);
+                const puntos = calcularPuntajePrediccion(pr, partido);
+                if (puntos == null) return;
+
+                const claveDispositivo = String(pr.dispositivo_id);
+                if (!porPersona.has(claveDispositivo)) {
+                    porPersona.set(claveDispositivo, { dispositivo_id: claveDispositivo, nombre: pr.nombre_apellido, club: pr.club_hincha || '', puntos: 0, exactos: 0, aciertos: 0, predicciones: 0 });
+                }
+                const e = porPersona.get(claveDispositivo);
+                e.nombre = pr.nombre_apellido;
+                e.club = pr.club_hincha || e.club;
+                e.puntos += puntos;
+                e.predicciones++;
+                if (puntos === 3) e.exactos++;
+                else if (puntos === 1) e.aciertos++;
+            });
+
+            return Array.from(porPersona.values()).sort((a, b) => b.puntos - a.puntos || b.exactos - a.exactos);
+        }
+
+        function abrirRankingProde() {
+            renderRankingProde();
+        }
+
+        function renderRankingProde() {
+            const jornadasDisponiblesTodas = obtenerJornadasDisponibles(
+                filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular')
+            );
+
+            if (PRODE_RANKING_JORNADA == null) {
+                PRODE_RANKING_JORNADA = PRODE_JORNADA_SELECCIONADA || jornadasDisponiblesTodas[jornadasDisponiblesTodas.length - 1];
+            }
+
+            const rankingCompleto = PRODE_RANKING_VISTA === 'fecha'
+                ? calcularRankingProde(PRODE_RANKING_JORNADA)
+                : calcularRankingProde(null);
+
+            const totalPaginas = Math.max(1, Math.ceil(rankingCompleto.length / 10));
+            const paginaRanking = Math.min(Math.max(PRODE_RANKING_PAGINA, 0), totalPaginas - 1);
+            const inicio = paginaRanking * 10;
+            const ranking = rankingCompleto.slice(inicio, inicio + 10);
+
+            const idx = jornadasDisponiblesTodas.indexOf(PRODE_RANKING_JORNADA);
+            const navegadorFecha = PRODE_RANKING_VISTA === 'fecha' ? `
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="cambiarJornadaRankingProde(-1)" class="p-1.5 text-muted disabled:opacity-25" ${idx <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-xs font-semibold text-texto">Fecha ${PRODE_RANKING_JORNADA}</span>
+      <button onclick="cambiarJornadaRankingProde(1)" class="p-1.5 text-muted disabled:opacity-25" ${idx >= jornadasDisponiblesTodas.length - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
+            const medalla = (posicion) => {
+                if (posicion === 1) return '🏆 ';
+                if (posicion === 2) return '🥈 ';
+                if (posicion === 3) return '🥉 ';
+                return '';
+            };
+
+            const filas = ranking.length
+                ? ranking.map((r, i) => {
+                    const posicion = inicio + i + 1;
+                    return `
+        <button onclick='abrirDetalleUsuarioProde(${JSON.stringify(r.dispositivo_id)}, ${PRODE_RANKING_VISTA === 'fecha' ? PRODE_RANKING_JORNADA : 'null'})' class="w-full flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mb-2 text-left">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-mono text-xs text-muted w-5 flex-shrink-0">${posicion}</span>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-sm text-texto truncate">${medalla(posicion)}${escaparHtml(r.nombre)}</span>
+              ${esDispositivoAdmin(r.dispositivo_id)
+                            ? `<span class="text-[9px] font-semibold text-accent uppercase flex-shrink-0">Admin</span>`
+                            : (r.club ? `<img src="${escudoClubPorNombre(r.club)}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(r.club)}');" class="w-4 h-4 rounded-full object-cover bg-elevado flex-shrink-0" title="${escaparHtml(r.club)}"/>` : '')}
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="text-[10px] text-muted">${r.exactos}🎯 ${r.aciertos}✓</span>
+            <span class="font-mono text-sm font-bold text-accent">${r.puntos} pts</span>
+          </div>
+        </button>
+      `;
+                }).join('')
+                : `<p class="text-center text-muted text-sm py-8">Todavía no hay puntos calculados${PRODE_RANKING_VISTA === 'fecha' ? ' para esta fecha' : ''}.</p>`;
+
+            const paginacionRanking = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mt-2">
+      <button onclick="cambiarPaginaRankingProde(-1)" class="p-1.5 text-muted disabled:opacity-25" ${paginaRanking <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${paginaRanking + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaRankingProde(1)" class="p-1.5 text-muted disabled:opacity-25" ${paginaRanking >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="font-display text-lg tracking-wide">🏆 Ranking</h2>
+      <button onclick="renderFormularioProde()" class="text-[11px] font-semibold text-accent uppercase tracking-wide">← Predecir</button>
+    </div>
+    <div class="flex gap-2 mb-3 mt-2">
+      <button onclick="cambiarVistaRankingProde('fecha')" class="flex-1 text-xs font-semibold px-3 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'fecha' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Por fecha</button>
+      <button onclick="cambiarVistaRankingProde('global')" class="flex-1 text-xs font-semibold px-3 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'global' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Global</button>
+    </div>
+    ${navegadorFecha}
+    <p class="text-[10px] text-muted mb-3">🎯 Resultado exacto (3 pts) · ✓ Acierto sin marcador (1 pt) — tocá un nombre para ver el detalle</p>
+    ${filas}
+    ${paginacionRanking}
+  `;
+        }
+
+        function cambiarPaginaRankingProde(delta) {
+            PRODE_RANKING_PAGINA += delta;
+            renderRankingProde();
+        }
+
+        function abrirDetalleUsuarioProde(dispositivoId, soloJornada) {
+            PRODE_DETALLE_PAGINA = 0;
+            renderDetalleUsuarioProde(dispositivoId, soloJornada);
+        }
+
+        function renderDetalleUsuarioProde(dispositivoId, soloJornada) {
+            const partidosPrimeraA = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular');
+            const porPartido = new Map();
+            partidosPrimeraA.forEach((p) => porPartido.set(String(p.id_local) + '_' + String(p.id_visitante) + '_' + p.fecha_nro, p));
+
+            let predicciones = (PRODE_DATOS || []).filter((pr) => String(pr.dispositivo_id) === String(dispositivoId));
+            if (soloJornada != null) predicciones = predicciones.filter((pr) => Number(pr.fecha_nro) === soloJornada);
+            predicciones.sort((a, b) => Number(b.fecha_nro) - Number(a.fecha_nro));
+
+            const nombre = predicciones[0]?.nombre_apellido || '—';
+
+            const totalPaginas = Math.max(1, Math.ceil(predicciones.length / PRODE_POR_PAGINA));
+            const pagina = Math.min(Math.max(PRODE_DETALLE_PAGINA, 0), totalPaginas - 1);
+            const items = predicciones.slice(pagina * PRODE_POR_PAGINA, pagina * PRODE_POR_PAGINA + PRODE_POR_PAGINA);
+
+            const filas = items.map((pr) => {
+                const partido = porPartido.get(String(pr.id_local) + '_' + String(pr.id_visitante) + '_' + pr.fecha_nro);
+                const local = equipoInfo(pr.id_local);
+                const visitante = equipoInfo(pr.id_visitante);
+                const puntos = calcularPuntajePrediccion(pr, partido);
+
+                let badge = `<span class="text-[10px] text-muted">Pendiente</span>`;
+                if (puntos === 3) badge = `<span class="text-xs font-bold text-accent">+3</span>`;
+                else if (puntos === 1) badge = `<span class="text-xs font-bold text-blue-400">+1</span>`;
+                else if (puntos === 0) badge = `<span class="text-xs font-bold text-live">0</span>`;
+
+                return `
+      <div class="flex items-center justify-between bg-elevado rounded-xl px-3 py-2 mb-2 text-xs">
+        <span class="text-[10px] text-muted w-12 flex-shrink-0">Fecha ${pr.fecha_nro}</span>
+        <span class="truncate flex-1 text-right">${escaparHtml(local.nombre)}</span>
+        <span class="font-mono font-semibold px-2 flex-shrink-0">${pr.pred_goles_local}-${pr.pred_goles_visitante}</span>
+        <span class="truncate flex-1">${escaparHtml(visitante.nombre)}</span>
+        <span class="w-8 text-right flex-shrink-0">${badge}</span>
+      </div>
+    `;
+            }).join('');
+
+            const paginacion = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mt-2">
+      <button onclick="cambiarPaginaDetalleProde('${dispositivoId}', ${soloJornada}, -1)" class="p-1.5 text-muted disabled:opacity-25" ${pagina <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${pagina + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaDetalleProde('${dispositivoId}', ${soloJornada}, 1)" class="p-1.5 text-muted disabled:opacity-25" ${pagina >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-display text-lg tracking-wide truncate">${escaparHtml(nombre)}</h2>
+      <button onclick="renderRankingProde()" class="text-[11px] font-semibold text-accent uppercase tracking-wide flex-shrink-0">← Ranking</button>
+    </div>
+    <p class="text-[10px] text-muted mb-3">🟢 +3 exacto · 🔵 +1 acierto · 🔴 0 sin acierto</p>
+    ${filas || '<p class="text-center text-muted text-sm py-8">Sin predicciones.</p>'}
+    ${paginacion}
+  `;
+        }
+
+        function cambiarPaginaDetalleProde(dispositivoId, soloJornada, delta) {
+            PRODE_DETALLE_PAGINA += delta;
+            renderDetalleUsuarioProde(dispositivoId, soloJornada === 'null' || soloJornada === null ? null : Number(soloJornada));
+        }
+
+        function cambiarJornadaRankingProde(delta) {
+            const jornadas = obtenerJornadasDisponibles(
+                filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular')
+            );
+            const idx = jornadas.indexOf(PRODE_RANKING_JORNADA) + delta;
+            if (idx >= 0 && idx < jornadas.length) {
+                PRODE_RANKING_JORNADA = jornadas[idx];
+                PRODE_RANKING_PAGINA = 0;
+                renderRankingProde();
+            }
+        }
+
+        function cambiarVistaRankingProde(vista) {
+            PRODE_RANKING_VISTA = vista;
+            PRODE_RANKING_PAGINA = 0;
+            renderRankingProde();
+        }
+
         function toggleFavorito(equipo, alConfirmar) {
             const clave = claveClub(equipo);
             if (FAVORITOS.has(clave)) {
@@ -2451,30 +3185,55 @@
 
         let FILTRO_EQUIPOS = '';
 
+        let EQUIPOS_PAGINA = 0;
+
         function renderEquipos() {
             const contenedor = document.getElementById('vista-contenido');
-            const clubs = obtenerClubsUnicos().filter((c) =>
+            const clubsFiltrados = obtenerClubsUnicos().filter((c) =>
                 normalizarClub(c.nombre).includes(normalizarClub(FILTRO_EQUIPOS))
             );
 
+            const totalPaginas = Math.max(1, Math.ceil(clubsFiltrados.length / 10));
+            const pagina = Math.min(Math.max(EQUIPOS_PAGINA, 0), totalPaginas - 1);
+            const clubs = clubsFiltrados.slice(pagina * 10, pagina * 10 + 10);
+
             const tip = tipOnboarding('equipos', 'Buscá tu equipo favorito para ver sus estadísticas y alineaciones.');
             const medallero = bloqueMedallero();
+
+            const paginacion = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mt-3 mb-2">
+      <button onclick="cambiarPaginaEquipos(-1)" class="p-1.5 text-muted disabled:opacity-25" ${pagina <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${pagina + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaEquipos(1)" class="p-1.5 text-muted disabled:opacity-25" ${pagina >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
 
             contenedor.innerHTML = `
     ${medallero}
     <input id="buscador-equipos" type="text" value="${escaparHtml(FILTRO_EQUIPOS)}" placeholder="Buscar equipo…" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2.5 text-sm text-texto placeholder:text-muted mb-1"/>
     ${tip}
     ${clubs.map(tarjetaEquipo).join('') || `<p class="text-center text-muted text-sm py-16">No se encontraron equipos.</p>`}
+    ${paginacion}
   `;
 
             const input = document.getElementById('buscador-equipos');
             input.addEventListener('input', (e) => {
                 FILTRO_EQUIPOS = e.target.value;
+                EQUIPOS_PAGINA = 0;
                 renderEquipos();
                 const nuevo = document.getElementById('buscador-equipos');
                 nuevo.focus();
                 nuevo.setSelectionRange(nuevo.value.length, nuevo.value.length);
             });
+        }
+
+        function cambiarPaginaEquipos(delta) {
+            EQUIPOS_PAGINA += delta;
+            renderEquipos();
         }
 
         function tarjetaEquipo(equipo) {
@@ -3430,107 +4189,6 @@
             poblarEquipos();
         }
 
-        function guardarPrediccion(datos) {
-            const { nombre_apellido, dispositivo_id, temporada, fecha_nro, id_local, id_visitante, pred_goles_local, pred_goles_visitante } = datos;
-
-            if (!nombre_apellido || !dispositivo_id) throw new Error('Faltan datos de identificación.');
-            if (pred_goles_local === '' || pred_goles_visitante === '' || pred_goles_local == null || pred_goles_visitante == null) {
-                throw new Error('Completá ambos marcadores.');
-            }
-
-            const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-            // Validar que el partido exista, esté en Primera A, no esté finalizado,
-            // y que todavía estemos a tiempo (antes de las 18hs de ese día).
-            const partidos = leerHoja(ss, 'partidos');
-            const partido = partidos.find((p) =>
-                p.categoria === CATEGORIA_PRODE &&
-                String(p.temporada) === String(temporada) &&
-                String(p.fecha_nro) === String(fecha_nro) &&
-                String(p.id_local) === String(id_local) &&
-                String(p.id_visitante) === String(id_visitante)
-            );
-
-            if (!partido) throw new Error('No encontré ese partido.');
-            if (String(partido.estado || '').toLowerCase().includes('final')) {
-                throw new Error('Ese partido ya finalizó, no se puede predecir.');
-            }
-
-            if (partido.fecha) {
-                const zonaHoraria = Session.getScriptTimeZone();
-                const ahora = new Date();
-                const fechaPartido = new Date(partido.fecha + 'T00:00:00');
-                const fechaCorte = new Date(fechaPartido.getTime());
-                fechaCorte.setHours(HORA_CORTE_PRODE, 0, 0, 0);
-
-                if (ahora >= fechaCorte && ahora.toDateString() === fechaPartido.toDateString()) {
-                    throw new Error('Ya pasó el horario límite para predecir este partido.');
-                }
-                if (ahora > fechaPartido && ahora.toDateString() !== fechaPartido.toDateString()) {
-                    throw new Error('Ya pasó la fecha de este partido.');
-                }
-            }
-
-            // Buscar si este dispositivo ya predijo este partido puntual — si es así,
-            // actualiza la fila existente en vez de crear una nueva (permite cambiar
-            // de opinión hasta el corte).
-            let sheet = ss.getSheetByName('Prode');
-            if (!sheet) {
-                sheet = ss.insertSheet('Prode');
-                sheet.appendRow(['nombre_apellido', 'dispositivo_id', 'categoria', 'temporada', 'fecha_nro', 'id_local', 'id_visitante', 'pred_goles_local', 'pred_goles_visitante', 'fecha_carga']);
-            }
-
-            const valores = sheet.getDataRange().getValues();
-            const headers = valores[0].map((h) => String(h).trim());
-            const col = {
-                nombre: headers.indexOf('nombre_apellido'),
-                dispositivo: headers.indexOf('dispositivo_id'),
-                temporada: headers.indexOf('temporada'),
-                fecha_nro: headers.indexOf('fecha_nro'),
-                id_local: headers.indexOf('id_local'),
-                id_visitante: headers.indexOf('id_visitante'),
-                pred_local: headers.indexOf('pred_goles_local'),
-                pred_visitante: headers.indexOf('pred_goles_visitante'),
-                fecha_carga: headers.indexOf('fecha_carga'),
-            };
-
-            const marcaTiempo = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
-
-            for (let i = 1; i < valores.length; i++) {
-                const fila = valores[i];
-                const coincide =
-                    String(fila[col.dispositivo]) === String(dispositivo_id) &&
-                    String(fila[col.temporada]) === String(temporada) &&
-                    String(fila[col.fecha_nro]) === String(fecha_nro) &&
-                    String(fila[col.id_local]) === String(id_local) &&
-                    String(fila[col.id_visitante]) === String(id_visitante);
-
-                if (coincide) {
-                    const filaSheet = i + 1;
-                    sheet.getRange(filaSheet, col.nombre + 1).setValue(nombre_apellido);
-                    sheet.getRange(filaSheet, col.pred_local + 1).setValue(Number(pred_goles_local));
-                    sheet.getRange(filaSheet, col.pred_visitante + 1).setValue(Number(pred_goles_visitante));
-                    sheet.getRange(filaSheet, col.fecha_carga + 1).setValue(marcaTiempo);
-                    CacheService.getScriptCache().removeAll(CLAVES_CACHE.concat(['datos_prode']));
-                    return { ok: true, actualizado: true };
-                }
-            }
-
-            sheet.appendRow([nombre_apellido, dispositivo_id, CATEGORIA_PRODE, temporada, fecha_nro, id_local, id_visitante, Number(pred_goles_local), Number(pred_goles_visitante), marcaTiempo]);
-            CacheService.getScriptCache().removeAll(CLAVES_CACHE.concat(['datos_prode']));
-            return { ok: true, actualizado: false };
-        }
-
-        function leerProde(ss) {
-            const cache = CacheService.getScriptCache();
-            const cacheado = cache.get('datos_prode');
-            if (cacheado) return JSON.parse(cacheado);
-
-            const datos = leerHojaOpcional(ss, 'Prode');
-            try { cache.put('datos_prode', JSON.stringify(datos), 60); } catch (e) { /* no crítico */ }
-            return datos;
-        }
-
         function guardarAjustePuntosAdmin() {
             const categoria = document.getElementById('admin-pts-sel-categoria').value;
             const idEquipo = document.getElementById('admin-pts-sel-equipo').value;
@@ -3814,6 +4472,11 @@
             return EQUIPOS_POR_ID.get(String(id)) || { nombre: 'Equipo desconocido', url_escudo: '' };
         }
 
+        function escudoClubPorNombre(nombreClub) {
+            const equipo = EQUIPOS.find((e) => normalizarClub(e.nombre) === normalizarClub(nombreClub));
+            return equipo && equipo.url_escudo ? equipo.url_escudo : escudoPorDefecto(nombreClub);
+        }
+
         function actualizarContadorVivos(cantidad) {
             const cont = document.getElementById('contador-vivos');
             if (cantidad > 0) {
@@ -3911,9 +4574,19 @@
             return `📊 ${equipo.nombre} — ${etiquetaCategoria}\n\n` +
                 `PJ: ${d.pj}  PG: ${d.pg}  PE: ${d.pe}  PP: ${d.pp}\n` +
                 `GF: ${d.gf}  GC: ${d.gc}\n` +
-                `Goles a favor/partido: ${d.promedioGF.toFixed(1)}\n` +
-                `Goles en contra/partido: ${d.promedioGC.toFixed(1)}\n\n` +
+                `Goles a favor / partido: ${d.promedioGF.toFixed(1)}\n` +
+                `Goles en contra / partido: ${d.promedioGC.toFixed(1)}\n\n` +
                 `Mirá todo en FutsalHub 👉 ${window.location.href}`;
+        }
+
+        function textoCompartirProde() {
+            const nombre = NOMBRE_USUARIO || 'Un usuario';
+            return `🎯 ${nombre} te invita a jugar al Prode de la Rosarina en FutsalHub!\n\nPredecí los resultados de Primera A y competí en el ranking 🏆\n\n👉 ${window.location.href}`;
+        }
+
+        function esDispositivoAdmin(dispositivoId) {
+            const registro = PRODE_DATOS.find((p) => String(p.dispositivo_id) === String(dispositivoId));
+            return !!(registro && registro.es_admin);
         }
 
         function iconoPalmares(tipo) {
@@ -4198,9 +4871,9 @@
         if (contVista) observadorImagenes.observe(contVista, { childList: true, subtree: true });
         if (contModal) observadorImagenes.observe(contModal, { childList: true, subtree: true });
 
-        precargarSponsorTemprano();
-
         cargarFavoritos();
+        inicializarIdentidadProde();
+        precargarSponsorTemprano();
         cargarDatos();
     </script>
 
