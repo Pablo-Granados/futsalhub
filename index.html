@@ -295,6 +295,9 @@
         const CATEGORIAS_CON_ASCENSO = ['Primera B'];
         const CATEGORIAS_CON_DESCENSO = ['Primera A', 'Femenino A'];
 
+        const CATEGORIA_PRODE = 'Primera A';
+        const HORA_CORTE_PRODE = 18; // 24hs antes en la práctica, aproximado a "mismo día antes de las 18hs"
+
         // Override manual: cuando un descenso se definió por triangular/desempate
         // en vez de directamente por tabla, se declara acá.
         // clave = "categoria|temporada", valor = array de nombres de equipo (tal
@@ -1526,13 +1529,13 @@
         }
 
         function filaCompactaPartido(partido) {
-  const local = equipoInfo(partido.id_local);
-  const visitante = equipoInfo(partido.id_visitante);
-  const estado = normalizarEstado(partido.estado);
-  const mostrarGol = estado !== 'programado';
-  const clickable = partido.id_local != null && partido.id_visitante != null;
+            const local = equipoInfo(partido.id_local);
+            const visitante = equipoInfo(partido.id_visitante);
+            const estado = normalizarEstado(partido.estado);
+            const mostrarGol = estado !== 'programado';
+            const clickable = partido.id_local != null && partido.id_visitante != null;
 
-  return `
+            return `
     <article class="bg-surface border border-borde rounded-2xl px-3 py-3 ${clickable ? 'cursor-pointer active:opacity-70' : ''}"
       ${clickable ? `data-h2h-local="${partido.id_local}" data-h2h-visitante="${partido.id_visitante}" data-h2h-fecha-nro="${partido.fecha_nro}" data-h2h-temporada="${partido.temporada}"` : ''}>
       <div class="flex items-center gap-2">
@@ -1546,7 +1549,7 @@
       </div>
     </article>
   `;
-}
+        }
 
         function pillEstado(estado, fechaTexto) {
             const sufijo = fechaTexto ? ` ${fechaTexto}` : '';
@@ -2652,42 +2655,42 @@
         }
 
         function abrirModalHistorial(idLocal, idVisitante, fechaNro, temporada) {
-    const equipoA = equipoInfo(idLocal);
-    const equipoB = equipoInfo(idVisitante);
-    ULTIMO_H2H = { idLocal, idVisitante };
-    ULTIMO_VOLVER_CUSTOM = null;
-    PALMARES_VOLVER_MEDALLERO = false;
-    document.getElementById('btn-volver-modal').classList.add('hidden');
-    const clubA = claveClub(equipoA);
-    H2H_HISTORIAL_ACTUAL = calcularHistorialH2H(idLocal, idVisitante);
-    H2H_PAGINA = 0;
-    let ganoA = 0, ganoB = 0, empates = 0;
-    H2H_HISTORIAL_ACTUAL.forEach((p) => {
-        const aEsLocal = claveClub(equipoInfo(p.id_local)) === clubA;
-        const gA = aEsLocal ? Number(p.goles_local) || 0 : Number(p.goles_visitante) || 0;
-        const gB = aEsLocal ? Number(p.goles_visitante) || 0 : Number(p.goles_local) || 0;
-        if (gA > gB) ganoA++;
-        else if (gA < gB) ganoB++;
-        else empates++;
-    });
-    const partidoTocado = fechaNro != null
-        ? PARTIDOS.find((p) =>
-            String(p.fecha_nro) === String(fechaNro) &&
-            String(p.temporada) === String(temporada) &&
-            ((String(p.id_local) === String(idLocal) && String(p.id_visitante) === String(idVisitante)) ||
-                (String(p.id_local) === String(idVisitante) && String(p.id_visitante) === String(idLocal)))
-        )
-        : null;
-    const yaFinalizado = partidoTocado && normalizarEstado(partidoTocado.estado) === 'finalizado';
-    const golLocalTocado = partidoTocado && String(partidoTocado.id_local) === String(idLocal) ? partidoTocado.goles_local : partidoTocado?.goles_visitante;
-    const golVisitanteTocado = partidoTocado && String(partidoTocado.id_local) === String(idLocal) ? partidoTocado.goles_visitante : partidoTocado?.goles_local;
-    const encabezadoMarcador = yaFinalizado
-        ? `<span class="font-mono text-lg font-semibold text-texto">${golLocalTocado ?? 0} - ${golVisitanteTocado ?? 0}</span>`
-        : `<span class="font-display text-sm text-muted">VS</span>`;
-    const textoCompartirResultado = partidoTocado
-        ? textoCompartirPartido(partidoTocado)
-        : `⚽ ${equipoA.nombre} vs ${equipoB.nombre}\n\nMirá todo en FutsalHub 👉 ${window.location.href}`;
-    document.getElementById('modal-contenido').innerHTML = `
+            const equipoA = equipoInfo(idLocal);
+            const equipoB = equipoInfo(idVisitante);
+            ULTIMO_H2H = { idLocal, idVisitante };
+            ULTIMO_VOLVER_CUSTOM = null;
+            PALMARES_VOLVER_MEDALLERO = false;
+            document.getElementById('btn-volver-modal').classList.add('hidden');
+            const clubA = claveClub(equipoA);
+            H2H_HISTORIAL_ACTUAL = calcularHistorialH2H(idLocal, idVisitante);
+            H2H_PAGINA = 0;
+            let ganoA = 0, ganoB = 0, empates = 0;
+            H2H_HISTORIAL_ACTUAL.forEach((p) => {
+                const aEsLocal = claveClub(equipoInfo(p.id_local)) === clubA;
+                const gA = aEsLocal ? Number(p.goles_local) || 0 : Number(p.goles_visitante) || 0;
+                const gB = aEsLocal ? Number(p.goles_visitante) || 0 : Number(p.goles_local) || 0;
+                if (gA > gB) ganoA++;
+                else if (gA < gB) ganoB++;
+                else empates++;
+            });
+            const partidoTocado = fechaNro != null
+                ? PARTIDOS.find((p) =>
+                    String(p.fecha_nro) === String(fechaNro) &&
+                    String(p.temporada) === String(temporada) &&
+                    ((String(p.id_local) === String(idLocal) && String(p.id_visitante) === String(idVisitante)) ||
+                        (String(p.id_local) === String(idVisitante) && String(p.id_visitante) === String(idLocal)))
+                )
+                : null;
+            const yaFinalizado = partidoTocado && normalizarEstado(partidoTocado.estado) === 'finalizado';
+            const golLocalTocado = partidoTocado && String(partidoTocado.id_local) === String(idLocal) ? partidoTocado.goles_local : partidoTocado?.goles_visitante;
+            const golVisitanteTocado = partidoTocado && String(partidoTocado.id_local) === String(idLocal) ? partidoTocado.goles_visitante : partidoTocado?.goles_local;
+            const encabezadoMarcador = yaFinalizado
+                ? `<span class="font-mono text-lg font-semibold text-texto">${golLocalTocado ?? 0} - ${golVisitanteTocado ?? 0}</span>`
+                : `<span class="font-display text-sm text-muted">VS</span>`;
+            const textoCompartirResultado = partidoTocado
+                ? textoCompartirPartido(partidoTocado)
+                : `⚽ ${equipoA.nombre} vs ${equipoB.nombre}\n\nMirá todo en FutsalHub 👉 ${window.location.href}`;
+            document.getElementById('modal-contenido').innerHTML = `
     <div class="flex items-center justify-center gap-4 mb-2">
       <div class="flex flex-col items-center gap-1.5 w-24">
         <img src="${equipoA.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoA.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${idLocal}" data-volver-h2h="1"/>
@@ -2723,9 +2726,9 @@
       <div id="h2h-paginacion" class="flex items-center justify-between mt-3"></div>
     ` : `<p class="text-xs text-muted text-center py-6">Todavía no se enfrentaron en esta categoría.</p>`}
   `;
-    document.getElementById('modal-equipo').classList.remove('hidden');
-    if (H2H_HISTORIAL_ACTUAL.length) renderPaginaHistorial();
-}
+            document.getElementById('modal-equipo').classList.remove('hidden');
+            if (H2H_HISTORIAL_ACTUAL.length) renderPaginaHistorial();
+        }
 
         function paginarHtml(lista, pagina, renderItem, idPrefijo) {
             const totalPaginas = Math.max(1, Math.ceil(lista.length / FAVORITOS_POR_PAGINA));
@@ -3425,6 +3428,107 @@
             };
             selCat.onchange = poblarEquipos;
             poblarEquipos();
+        }
+
+        function guardarPrediccion(datos) {
+            const { nombre_apellido, dispositivo_id, temporada, fecha_nro, id_local, id_visitante, pred_goles_local, pred_goles_visitante } = datos;
+
+            if (!nombre_apellido || !dispositivo_id) throw new Error('Faltan datos de identificación.');
+            if (pred_goles_local === '' || pred_goles_visitante === '' || pred_goles_local == null || pred_goles_visitante == null) {
+                throw new Error('Completá ambos marcadores.');
+            }
+
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+            // Validar que el partido exista, esté en Primera A, no esté finalizado,
+            // y que todavía estemos a tiempo (antes de las 18hs de ese día).
+            const partidos = leerHoja(ss, 'partidos');
+            const partido = partidos.find((p) =>
+                p.categoria === CATEGORIA_PRODE &&
+                String(p.temporada) === String(temporada) &&
+                String(p.fecha_nro) === String(fecha_nro) &&
+                String(p.id_local) === String(id_local) &&
+                String(p.id_visitante) === String(id_visitante)
+            );
+
+            if (!partido) throw new Error('No encontré ese partido.');
+            if (String(partido.estado || '').toLowerCase().includes('final')) {
+                throw new Error('Ese partido ya finalizó, no se puede predecir.');
+            }
+
+            if (partido.fecha) {
+                const zonaHoraria = Session.getScriptTimeZone();
+                const ahora = new Date();
+                const fechaPartido = new Date(partido.fecha + 'T00:00:00');
+                const fechaCorte = new Date(fechaPartido.getTime());
+                fechaCorte.setHours(HORA_CORTE_PRODE, 0, 0, 0);
+
+                if (ahora >= fechaCorte && ahora.toDateString() === fechaPartido.toDateString()) {
+                    throw new Error('Ya pasó el horario límite para predecir este partido.');
+                }
+                if (ahora > fechaPartido && ahora.toDateString() !== fechaPartido.toDateString()) {
+                    throw new Error('Ya pasó la fecha de este partido.');
+                }
+            }
+
+            // Buscar si este dispositivo ya predijo este partido puntual — si es así,
+            // actualiza la fila existente en vez de crear una nueva (permite cambiar
+            // de opinión hasta el corte).
+            let sheet = ss.getSheetByName('Prode');
+            if (!sheet) {
+                sheet = ss.insertSheet('Prode');
+                sheet.appendRow(['nombre_apellido', 'dispositivo_id', 'categoria', 'temporada', 'fecha_nro', 'id_local', 'id_visitante', 'pred_goles_local', 'pred_goles_visitante', 'fecha_carga']);
+            }
+
+            const valores = sheet.getDataRange().getValues();
+            const headers = valores[0].map((h) => String(h).trim());
+            const col = {
+                nombre: headers.indexOf('nombre_apellido'),
+                dispositivo: headers.indexOf('dispositivo_id'),
+                temporada: headers.indexOf('temporada'),
+                fecha_nro: headers.indexOf('fecha_nro'),
+                id_local: headers.indexOf('id_local'),
+                id_visitante: headers.indexOf('id_visitante'),
+                pred_local: headers.indexOf('pred_goles_local'),
+                pred_visitante: headers.indexOf('pred_goles_visitante'),
+                fecha_carga: headers.indexOf('fecha_carga'),
+            };
+
+            const marcaTiempo = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+
+            for (let i = 1; i < valores.length; i++) {
+                const fila = valores[i];
+                const coincide =
+                    String(fila[col.dispositivo]) === String(dispositivo_id) &&
+                    String(fila[col.temporada]) === String(temporada) &&
+                    String(fila[col.fecha_nro]) === String(fecha_nro) &&
+                    String(fila[col.id_local]) === String(id_local) &&
+                    String(fila[col.id_visitante]) === String(id_visitante);
+
+                if (coincide) {
+                    const filaSheet = i + 1;
+                    sheet.getRange(filaSheet, col.nombre + 1).setValue(nombre_apellido);
+                    sheet.getRange(filaSheet, col.pred_local + 1).setValue(Number(pred_goles_local));
+                    sheet.getRange(filaSheet, col.pred_visitante + 1).setValue(Number(pred_goles_visitante));
+                    sheet.getRange(filaSheet, col.fecha_carga + 1).setValue(marcaTiempo);
+                    CacheService.getScriptCache().removeAll(CLAVES_CACHE.concat(['datos_prode']));
+                    return { ok: true, actualizado: true };
+                }
+            }
+
+            sheet.appendRow([nombre_apellido, dispositivo_id, CATEGORIA_PRODE, temporada, fecha_nro, id_local, id_visitante, Number(pred_goles_local), Number(pred_goles_visitante), marcaTiempo]);
+            CacheService.getScriptCache().removeAll(CLAVES_CACHE.concat(['datos_prode']));
+            return { ok: true, actualizado: false };
+        }
+
+        function leerProde(ss) {
+            const cache = CacheService.getScriptCache();
+            const cacheado = cache.get('datos_prode');
+            if (cacheado) return JSON.parse(cacheado);
+
+            const datos = leerHojaOpcional(ss, 'Prode');
+            try { cache.put('datos_prode', JSON.stringify(datos), 60); } catch (e) { /* no crítico */ }
+            return datos;
         }
 
         function guardarAjustePuntosAdmin() {
