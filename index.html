@@ -3202,26 +3202,35 @@
             const items = predicciones.slice(pagina * PRODE_POR_PAGINA, pagina * PRODE_POR_PAGINA + PRODE_POR_PAGINA);
 
             const filas = items.map((pr) => {
-                const partido = porPartido.get(String(pr.id_local) + '_' + String(pr.id_visitante) + '_' + pr.fecha_nro);
-                const local = equipoInfo(pr.id_local);
-                const visitante = equipoInfo(pr.id_visitante);
-                const puntos = calcularPuntajePrediccion(pr, partido);
+    const partido = porPartido.get(String(pr.id_local) + '_' + String(pr.id_visitante) + '_' + pr.fecha_nro);
+    const local = equipoInfo(pr.id_local);
+    const visitante = equipoInfo(pr.id_visitante);
+    const puntos = calcularPuntajePrediccion(pr, partido);
+    const finalizado = partido && normalizarEstado(partido.estado) === 'finalizado';
 
-                let badge = `<span class="text-[10px] text-muted">Pendiente</span>`;
-                if (puntos === 3) badge = `<span class="text-xs font-bold text-accent">+3</span>`;
-                else if (puntos === 1) badge = `<span class="text-xs font-bold text-blue-400">+1</span>`;
-                else if (puntos === 0) badge = `<span class="text-xs font-bold text-live">0</span>`;
+    let badge = `<span class="text-[10px] text-muted">Pendiente</span>`;
+    if (puntos === 3) badge = `<span class="text-xs font-bold text-accent">+3</span>`;
+    else if (puntos === 1) badge = `<span class="text-xs font-bold text-blue-400">+1</span>`;
+    else if (puntos === 0) badge = `<span class="text-xs font-bold text-live">0</span>`;
 
-                return `
-      <div class="flex items-center justify-between bg-elevado rounded-xl px-3 py-2 mb-2 text-xs">
-        <span class="text-[10px] text-muted w-12 flex-shrink-0">Fecha ${pr.fecha_nro}</span>
-        <span class="truncate flex-1 text-right">${escaparHtml(local.nombre)}</span>
-        <span class="font-mono font-semibold px-2 flex-shrink-0">${pr.pred_goles_local}-${pr.pred_goles_visitante}</span>
-        <span class="truncate flex-1">${escaparHtml(visitante.nombre)}</span>
-        <span class="w-8 text-right flex-shrink-0">${badge}</span>
+    return `
+      <div class="bg-elevado rounded-xl px-3 py-2 mb-2">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-[10px] text-muted w-12 flex-shrink-0">Fecha ${pr.fecha_nro}</span>
+          <span class="truncate flex-1 text-right">${escaparHtml(local.nombre)}</span>
+          <span class="font-mono font-semibold px-2 flex-shrink-0">${pr.pred_goles_local}-${pr.pred_goles_visitante}</span>
+          <span class="truncate flex-1">${escaparHtml(visitante.nombre)}</span>
+          <span class="w-8 text-right flex-shrink-0">${badge}</span>
+        </div>
+        ${finalizado ? `
+          <div class="flex items-center justify-center gap-1.5 mt-1 pt-1 border-t border-borde/60">
+            <span class="text-[9px] text-muted uppercase">Resultado real</span>
+            <span class="font-mono text-[11px] font-semibold text-texto">${partido.goles_local}-${partido.goles_visitante}</span>
+          </div>
+        ` : ''}
       </div>
     `;
-            }).join('');
+  }).join('');
 
             const paginacion = totalPaginas > 1 ? `
     <div class="flex items-center justify-between mt-2">
