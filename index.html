@@ -2700,6 +2700,8 @@
   `;
         }
 
+
+
         function toggleEditarPrediccion(clave) {
             if (PRODE_EDITANDO.has(clave)) PRODE_EDITANDO.delete(clave);
             else PRODE_EDITANDO.add(clave);
@@ -2809,7 +2811,8 @@
                     });
 
                     PRODE_EDITANDO.clear();
-                    renderFormularioProde();
+                    const huboSiguiente = ofrecerSiguienteFechaProde();
+                    if (!huboSiguiente) renderFormularioProde();
 
                     // Sincroniza con el servidor en segundo plano, sin bloquear la vista.
                     cargarDatos();
@@ -2818,6 +2821,52 @@
                     estadoEl.textContent = 'Error: ' + err.message;
                     estadoEl.className = 'text-center text-xs mt-2 text-live';
                 });
+        }
+
+        function ofrecerSiguienteFechaProde() {
+            const jornadasDisponibles = obtenerJornadasProdeDisponibles();
+            const idx = jornadasDisponibles.indexOf(PRODE_JORNADA_SELECCIONADA);
+
+            const partidosDeEstaFecha = filtrarPorTemporada(PARTIDOS).filter(
+                (p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular' &&
+                    Number(p.fecha_nro) === PRODE_JORNADA_SELECCIONADA && normalizarEstado(p.estado) !== 'finalizado'
+            );
+            const yaPredichos = partidosDeEstaFecha.length > 0 && partidosDeEstaFecha.every((p) =>
+                PRODE_DATOS.some((pr) =>
+                    String(pr.dispositivo_id) === String(DISPOSITIVO_ID) &&
+                    Number(pr.fecha_nro) === PRODE_JORNADA_SELECCIONADA &&
+                    String(pr.id_local) === String(p.id_local) && String(pr.id_visitante) === String(p.id_visitante)
+                )
+            );
+
+            const hayFechaSiguiente = idx !== -1 && idx < jornadasDisponibles.length - 1;
+
+            if (yaPredichos && hayFechaSiguiente) {
+                const siguienteFecha = jornadasDisponibles[idx + 1];
+                renderFormularioProde();
+                mostrarSugerenciaFechaSiguiente(siguienteFecha);
+                return true;
+            }
+            return false;
+        }
+
+        function mostrarSugerenciaFechaSiguiente(siguienteFecha) {
+            const contenedor = document.getElementById('modal-contenido');
+            const aviso = document.createElement('div');
+            aviso.className = 'bg-accent/10 border border-accent/30 rounded-2xl px-4 py-3 mt-3 flex items-center gap-3';
+            aviso.innerHTML = `
+    <span class="text-2xl">🎯</span>
+    <div class="flex-1 min-w-0">
+      <p class="text-sm text-texto">Te faltan cargar los pronósticos de la Fecha ${siguienteFecha}, ¿querés cargarlos?</p>
+    </div>
+    <button onclick="irAFechaSugerida(${siguienteFecha})" class="text-xs font-semibold text-accent uppercase flex-shrink-0">Sí →</button>
+  `;
+            contenedor.appendChild(aviso);
+        }
+
+        function irAFechaSugerida(fecha) {
+            PRODE_JORNADA_SELECCIONADA = fecha;
+            renderFormularioProde();
         }
 
         function guardarUnaPrediccion(clave) {
@@ -2833,6 +2882,12 @@
             const gv = fila.querySelector('.prode-input-visitante').value;
 
             if (gl === '' || gv === '') return;
+
+            const btnGuardar = fila.querySelector('button[onclick*="guardarUnaPrediccion"]');
+            if (btnGuardar) {
+                btnGuardar.innerHTML = `<svg class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`;
+                btnGuardar.disabled = true;
+            }
 
             fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
@@ -2872,16 +2927,61 @@
                     else PRODE_DATOS.push(registro);
 
                     PRODE_EDITANDO.delete(clave);
-                    renderFormularioProde();
+                    const huboSiguiente = ofrecerSiguienteFechaProde();
+                    if (!huboSiguiente) renderFormularioProde();
                     cargarDatos();
                 })
                 .catch((err) => {
+                    if (btnGuardar) { btnGuardar.innerHTML = '💾'; btnGuardar.disabled = false; }
                     const estadoEl = document.getElementById('prode-estado');
                     if (estadoEl) {
                         estadoEl.textContent = 'Error: ' + err.message;
                         estadoEl.className = 'text-center text-xs mt-2 text-live';
                     }
                 });
+        }
+
+        function verificarFechaCompletaYSugerir() {
+            const jornadasDisponibles = obtenerJornadasProdeDisponibles();
+            const idx = jornadasDisponibles.indexOf(PRODE_JORNADA_SELECCIONADA);
+
+            const partidosDeEstaFecha = filtrarPorTemporada(PARTIDOS).filter(
+                (p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular' &&
+                    Number(p.fecha_nro) === PRODE_JORNADA_SELECCIONADA && normalizarEstado(p.estado) !== 'finalizado'
+            );
+            const yaPredichos = partidosDeEstaFecha.every((p) =>
+                PRODE_DATOS.some((pr) =>
+                    String(pr.dispositivo_id) === String(DISPOSITIVO_ID) &&
+                    Number(pr.fecha_nro) === PRODE_JORNADA_SELECCIONADA &&
+                    String(pr.id_local) === String(p.id_local) && String(pr.id_visitante) === String(p.id_visitante)
+                )
+            );
+
+            const hayFechaSiguiente = idx !== -1 && idx < jornadasDisponibles.length - 1;
+
+            if (yaPredichos && partidosDeEstaFecha.length > 0 && hayFechaSiguiente) {
+                const siguienteFecha = jornadasDisponibles[idx + 1];
+                mostrarSugerenciaFechaSiguiente(siguienteFecha);
+            }
+        }
+
+        function mostrarSugerenciaFechaSiguiente(siguienteFecha) {
+            const contenedor = document.getElementById('modal-contenido');
+            const aviso = document.createElement('div');
+            aviso.className = 'bg-accent/10 border border-accent/30 rounded-2xl px-4 py-3 mt-3 flex items-center gap-3';
+            aviso.innerHTML = `
+    <span class="text-2xl">🎯</span>
+    <div class="flex-1 min-w-0">
+      <p class="text-sm text-texto">Te faltan cargar los pronósticos de la Fecha ${siguienteFecha}, ¿querés cargarlos?</p>
+    </div>
+    <button onclick="irAFechaSugerida(${siguienteFecha})" class="text-xs font-semibold text-accent uppercase flex-shrink-0">Sí →</button>
+  `;
+            contenedor.appendChild(aviso);
+        }
+
+        function irAFechaSugerida(fecha) {
+            PRODE_JORNADA_SELECCIONADA = fecha;
+            renderFormularioProde();
         }
 
         let PRODE_RANKING_VISTA = 'fecha';
@@ -2981,6 +3081,10 @@
                 return '';
             };
 
+            if (PRODE_RANKING_VISTA === 'participantes') {
+                return renderParticipantesProde();
+            }
+
             const filas = ranking.length
                 ? ranking.map((r, i) => {
                     const posicion = inicio + i + 1;
@@ -3022,13 +3126,53 @@
       <button onclick="renderFormularioProde()" class="text-[11px] font-semibold text-accent uppercase tracking-wide">← Predecir</button>
     </div>
     <div class="flex gap-2 mb-3 mt-2">
-      <button onclick="cambiarVistaRankingProde('fecha')" class="flex-1 text-xs font-semibold px-3 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'fecha' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Por fecha</button>
-      <button onclick="cambiarVistaRankingProde('global')" class="flex-1 text-xs font-semibold px-3 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'global' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Global</button>
+      <button onclick="cambiarVistaRankingProde('fecha')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'fecha' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Por fecha</button>
+      <button onclick="cambiarVistaRankingProde('global')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'global' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Global</button>
+      <button onclick="cambiarVistaRankingProde('participantes')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'participantes' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Participantes</button>
     </div>
     ${navegadorFecha}
     <p class="text-[10px] text-muted mb-3">🎯 Resultado exacto (3 pts) · ✓ Acierto sin marcador (1 pt) — tocá un nombre para ver el detalle</p>
     ${filas}
     ${paginacionRanking}
+  `;
+        }
+
+        function renderParticipantesProde() {
+            const nombresUnicos = new Map();
+            (PRODE_DATOS || []).forEach((pr) => {
+                const clave = String(pr.dispositivo_id);
+                if (!nombresUnicos.has(clave)) {
+                    nombresUnicos.set(clave, { dispositivo_id: clave, nombre: pr.nombre_apellido, club: pr.club_hincha || '' });
+                }
+            });
+
+            const lista = Array.from(nombresUnicos.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+            const filas = lista.length
+                ? lista.map((p) => `
+        <button onclick='abrirDetalleUsuarioProde(${JSON.stringify(p.dispositivo_id)}, null)' class="w-full flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mb-2 text-left">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-sm text-texto truncate">${escaparHtml(p.nombre)}</span>
+          </div>
+          ${esDispositivoAdmin(p.dispositivo_id)
+                        ? `<span class="text-[9px] font-semibold text-accent uppercase flex-shrink-0">Admin</span>`
+                        : (p.club ? `<img src="${escudoClubPorNombre(p.club)}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(p.club)}');" class="w-4 h-4 rounded-full object-cover bg-elevado flex-shrink-0" title="${escaparHtml(p.club)}"/>` : '')}
+        </button>
+      `).join('')
+                : `<p class="text-center text-muted text-sm py-8">Todavía no hay participantes.</p>`;
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="font-display text-lg tracking-wide">🏆 Ranking</h2>
+      <button onclick="renderFormularioProde()" class="text-[11px] font-semibold text-accent uppercase tracking-wide">← Predecir</button>
+    </div>
+    <div class="flex gap-2 mb-3 mt-2">
+      <button onclick="cambiarVistaRankingProde('fecha')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border bg-transparent text-muted border-borde">Por fecha</button>
+      <button onclick="cambiarVistaRankingProde('global')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border bg-transparent text-muted border-borde">Global</button>
+      <button onclick="cambiarVistaRankingProde('participantes')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border bg-accent text-cancha border-accent">Participantes</button>
+    </div>
+    <p class="text-[10px] text-muted mb-3">${lista.length} jugando · orden alfabético</p>
+    ${filas}
   `;
         }
 
