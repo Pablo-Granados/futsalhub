@@ -12,6 +12,12 @@
         href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=Roboto+Mono:wght@500;600&display=swap"
         rel="stylesheet">
     <link rel="icon" type="image/png" href="/img/futsalhub-logo.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/img/futsalhub-logo.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Futsal Hub">
     <link rel="stylesheet" href="css/output.css">
     <style>
         .lineas-cancha {
@@ -194,7 +200,8 @@
                     <span class="text-[10px] font-semibold uppercase tracking-wide">Equipos</span>
                 </button>
                 <button data-vista="comunidad"
-                    class="btn-nav text-muted flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors">
+                    class="btn-nav text-muted flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors relative">
+                    <span id="badge-prode-nuevo" class="hidden absolute top-1.5 right-[28%] w-2 h-2 rounded-full bg-live"></span>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -239,6 +246,31 @@
             <button onclick="enviarFeedback()"
                 class="w-full mt-3 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Enviar</button>
             <p id="feedback-estado-envio" class="text-center text-xs text-muted mt-2 min-h-[16px]"></p>
+        </div>
+    </div>
+
+    <!-- BANNER DE INSTALACIÓN (Android/Chrome) -->
+    <div id="banner-instalar-app" class="hidden fixed inset-x-0 bottom-[108px] z-30 px-4 pb-1.5">
+        <div onclick="instalarAppAndroid()" class="flex items-center gap-2 bg-accent text-cancha rounded-xl px-3 py-2.5 cursor-pointer">
+            <span class="text-xl">📲</span>
+            <p class="text-xs font-semibold flex-1">Instalá Futsal Hub en tu celular</p>
+            <span class="text-xs font-bold underline">Instalar</span>
+            <button onclick="event.stopPropagation(); cerrarBannerInstalar()" class="text-lg leading-none px-1">✕</button>
+        </div>
+    </div>
+
+    <!-- MODAL DE INVITACIÓN AL PRODE (una sola vez) -->
+    <div id="modal-invitacion-prode" class="hidden fixed inset-0 z-[62] flex items-center justify-center px-6">
+        <div class="absolute inset-0 bg-black/80"></div>
+        <div class="relative bg-surface border border-borde rounded-3xl p-6 max-w-xs w-full text-center">
+            <span class="text-3xl">🎯</span>
+            <p class="text-sm font-semibold text-texto mt-3 mb-1">¡Probá El Prode!</p>
+            <p class="text-xs text-muted leading-snug mb-5">Predecí los resultados de Primera A y competí en el ranking
+                con otros hinchas. Lo encontrás en Comunidad.</p>
+            <button onclick="irAlProdeDesdeInvitacion()"
+                class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5 mb-2">Ir al Prode</button>
+            <button onclick="cerrarInvitacionProde()"
+                class="w-full text-muted text-xs font-semibold uppercase tracking-wide py-1">Ahora no</button>
         </div>
     </div>
 
@@ -1005,6 +1037,7 @@
             CAMPEONES_MANUAL = data.campeonesManual || [];
             AJUSTES_PUNTOS = data.ajustesPuntos || [];
             PRODE_DATOS = data.prode || [];
+            NOTICIAS_DATOS = ordenarNoticias(data.noticias || []);
             EQUIPOS = equipos;
             EQUIPOS_POR_ID = new Map(equipos.map((eq) => [String(eq.id_equipo), eq]));
             PARTIDOS = partidos;
@@ -1090,6 +1123,10 @@
                 if (SPONSOR_MODAL_BLOQUEADO) completarProgresoSponsor();
 
                 if (typeof json.visitas === 'number') mostrarContadorVisitas(json.visitas);
+                if (esPrimeraCarga) {
+                    setTimeout(mostrarTipInstalarIOSSiCorresponde, 2000);
+                    setTimeout(mostrarInvitacionProdeSiCorresponde, 6000);
+                }
             } catch (err) {
                 console.error('Error cargando datos:', err);
                 if (SPONSOR_MODAL_BLOQUEADO) completarProgresoSponsor();
@@ -1238,6 +1275,9 @@
         let VISTA_ANTERIOR = null;
         let CAMPEONES_TEMPORADA = {};
         let CAMPEONES_MANUAL = [];
+        let NOTICIAS_DATOS = [];
+        let NOTICIAS_PAGINA = 0;
+        const NOTICIAS_POR_PAGINA = 8;
         let PRODE_DATOS = [];
         let AJUSTES_PUNTOS = [];
         let DESEMPATES_TEMPORADA = {};
@@ -1313,7 +1353,8 @@
     <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2">🏘️ Comunidad</h3>
     <div id="banner-comunidad"></div>
     ${bloqueCardProde()}
-    <p class="text-center text-muted text-sm py-16">Videos, noticias y más — en construcción.</p>
+    ${bloqueCardNoticias()}
+    <p class="text-center text-muted text-sm py-8">Videos — próximamente.</p>
   `;
 
             if (SPONSORS.length) {
@@ -1367,6 +1408,86 @@
       <span class="text-muted">→</span>
     </button>
   `;
+        }
+
+        function ordenarNoticias(lista) {
+            return [...lista].sort((a, b) => {
+                const destA = normalizarBooleano(a.destacada) ? 1 : 0;
+                const destB = normalizarBooleano(b.destacada) ? 1 : 0;
+                if (destA !== destB) return destB - destA;
+                return String(b.fecha || '').localeCompare(String(a.fecha || ''));
+            });
+        }
+
+        function bloqueCardNoticias() {
+            if (!NOTICIAS_DATOS.length) return '';
+
+            const totalPaginas = Math.max(1, Math.ceil(NOTICIAS_DATOS.length / NOTICIAS_POR_PAGINA));
+            if (NOTICIAS_PAGINA >= totalPaginas) NOTICIAS_PAGINA = totalPaginas - 1;
+            if (NOTICIAS_PAGINA < 0) NOTICIAS_PAGINA = 0;
+            const inicio = NOTICIAS_PAGINA * NOTICIAS_POR_PAGINA;
+            const items = NOTICIAS_DATOS.slice(inicio, inicio + NOTICIAS_POR_PAGINA);
+
+            const cards = items.map((n, i) => {
+                const idxReal = inicio + i;
+                const destacada = normalizarBooleano(n.destacada);
+                const esExterna = !!(n.link_url && String(n.link_url).trim());
+                const tag = esExterna ? 'a' : 'button';
+                const atributos = esExterna
+                    ? `href="${n.link_url}" target="_blank" rel="noopener"`
+                    : `onclick="abrirNoticia(${idxReal})" type="button"`;
+                return `
+      <${tag} ${atributos} class="flex gap-3 bg-surface border ${destacada ? 'border-accent' : 'border-borde'} rounded-2xl p-3 mb-2 text-left w-full">
+        <img src="${n.imagen_url || ''}" onerror="this.style.display='none'" class="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover bg-elevado flex-shrink-0"/>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-start justify-between gap-2">
+            <p class="text-sm font-bold text-texto leading-snug line-clamp-2">${escaparHtml(n.titulo || '')}</p>
+            <span class="text-muted flex-shrink-0 text-xs mt-0.5">${esExterna ? '↗' : '📖'}</span>
+          </div>
+          ${n.caption ? `<p class="text-xs text-muted mt-1 line-clamp-3">${escaparHtml(n.caption)}</p>` : ''}
+          <p class="text-[10px] text-muted mt-1.5">${destacada ? '⭐ Destacada · ' : ''}${formatearFechaVisual(n.fecha)}</p>
+        </div>
+      </${tag}>
+    `;
+            }).join('');
+
+            const paginacion = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="cambiarPaginaNoticias(-1)" class="p-1.5 text-muted disabled:opacity-25" ${NOTICIAS_PAGINA <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${NOTICIAS_PAGINA + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaNoticias(1)" class="p-1.5 text-muted disabled:opacity-25" ${NOTICIAS_PAGINA >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
+            return `
+    <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2 mt-1">📰 Noticias</h3>
+    ${cards}
+    ${paginacion}
+  `;
+        }
+
+        function cambiarPaginaNoticias(delta) {
+            NOTICIAS_PAGINA += delta;
+            renderComunidad();
+        }
+
+        function abrirNoticia(idx) {
+            const n = NOTICIAS_DATOS[idx];
+            if (!n) return;
+            ULTIMO_VOLVER_CUSTOM = null;
+            PALMARES_VOLVER_MEDALLERO = false;
+            document.getElementById('btn-volver-modal').classList.add('hidden');
+            document.getElementById('modal-contenido').innerHTML = `
+    <img src="${n.imagen_url || ''}" onerror="this.style.display='none'" class="w-full aspect-video rounded-2xl object-cover bg-elevado mb-3"/>
+    <p class="text-[10px] text-muted uppercase tracking-wide mb-1">${formatearFechaVisual(n.fecha)}</p>
+    <h2 class="font-display text-lg tracking-wide mb-3">${escaparHtml(n.titulo || '')}</h2>
+    <div class="text-sm text-texto leading-relaxed whitespace-pre-line">${escaparHtml(n.contenido || '')}</div>
+  `;
+            document.getElementById('modal-equipo').classList.remove('hidden');
         }
 
         /* ============================================================
@@ -2650,10 +2771,45 @@
         }
 
         function abrirProde() {
+            try { localStorage.setItem('prode_visitado', '1'); } catch (e) { }
+            actualizarBadgeProde();
             pedirNombreSiHaceFalta(() => {
                 renderFormularioProde();
                 document.getElementById('modal-equipo').classList.remove('hidden');
             });
+        }
+
+        function actualizarBadgeProde() {
+            try {
+                const visto = localStorage.getItem('prode_visitado') === '1';
+                document.getElementById('badge-prode-nuevo').classList.toggle('hidden', visto);
+            } catch (e) { }
+        }
+
+        function mostrarInvitacionProdeSiCorresponde() {
+            try {
+                if (localStorage.getItem('prode_visitado') === '1') return;
+                if (localStorage.getItem('prode_invitacion_definitivo') === '1') return;
+            } catch (e) { }
+            if (SPONSOR_MODAL_BLOQUEADO) { setTimeout(mostrarInvitacionProdeSiCorresponde, 3000); return; }
+            if (obtenerJornadaProdeActual() == null) return;
+            document.getElementById('modal-invitacion-prode').classList.remove('hidden');
+        }
+
+        function cerrarInvitacionProde() {
+            document.getElementById('modal-invitacion-prode').classList.add('hidden');
+            try {
+                const rechazos = Number(localStorage.getItem('prode_invitacion_rechazos') || 0) + 1;
+                localStorage.setItem('prode_invitacion_rechazos', String(rechazos));
+                // A partir del 3er "Ahora no", dejamos de insistir para siempre.
+                if (rechazos >= 3) localStorage.setItem('prode_invitacion_definitivo', '1');
+            } catch (e) { }
+        }
+
+        function irAlProdeDesdeInvitacion() {
+            cerrarInvitacionProde();
+            document.querySelector('.btn-nav[data-vista="comunidad"]').click();
+            setTimeout(() => abrirProde(), 300);
         }
 
         let PRODE_JORNADA_SELECCIONADA = null;
@@ -2703,7 +2859,7 @@
 
                 const inputsDisabled = cerrado || bloqueadaParaEditar;
 
-    return `
+                return `
       <div class="rounded-xl p-3 mb-2 transition-colors ${bloqueadaParaEditar ? 'bg-cancha opacity-60' : 'bg-elevado'}" data-prode-partido='${JSON.stringify({ id_local: p.id_local, id_visitante: p.id_visitante, fecha_nro: p.fecha_nro, clave })}'>
         <div class="flex items-center justify-between text-xs mb-2 gap-2">
           <div class="flex items-center gap-1.5 min-w-0">
@@ -2716,14 +2872,14 @@
           </div>
         </div>
         <div class="flex items-center justify-center gap-2">
-          <input type="number" min="0" class="prode-input-local w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_local : ''}" ${inputsDisabled ? 'disabled' : ''}/>
+          <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="prode-input-local w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_local : ''}" ${inputsDisabled ? 'disabled' : ''}/>
           <span class="text-muted text-sm">—</span>
-          <input type="number" min="0" class="prode-input-visitante w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_visitante : ''}" ${inputsDisabled ? 'disabled' : ''}/>
+          <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="prode-input-visitante w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_visitante : ''}" ${inputsDisabled ? 'disabled' : ''}/>
           ${previa && !cerrado
-            ? (bloqueadaParaEditar
-                ? `<button onclick='toggleEditarPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Editar">✏️</button>`
-                : `<button onclick='guardarUnaPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Guardar">💾</button>`)
-            : ''}
+                        ? (bloqueadaParaEditar
+                            ? `<button onclick='toggleEditarPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Editar">✏️</button>`
+                            : `<button onclick='guardarUnaPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Guardar">💾</button>`)
+                        : ''}
         </div>
         ${previa && bloqueadaParaEditar ? `<p class="text-[10px] text-accent text-center mt-1.5">✓ Ya predijiste — tocá ✏️ para editar</p>` : ''}
         ${previa && !bloqueadaParaEditar ? `<p class="text-[10px] text-warning text-center mt-1.5">Editando…</p>` : ''}
@@ -2752,9 +2908,27 @@
       `).join('')}
     </div>
     ${filasHtml}
-    <button onclick="guardarPrediccionesProde()" class="w-full mt-2 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Guardar predicciones</button>
-    <p id="prode-estado" class="text-center text-xs mt-2 min-h-[16px] text-muted"></p>
+    <div class="sticky bottom-0 -mx-5 px-5 pt-2 pb-1 bg-surface">
+      <button onclick="guardarPrediccionesProde()" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Guardar predicciones</button>
+      <p id="prode-estado" class="text-center text-xs mt-2 min-h-[16px] text-muted"></p>
+    </div>
   `;
+            configurarNavegacionProde();
+        }
+
+        function configurarNavegacionProde() {
+            const cont = document.getElementById('modal-contenido');
+            if (!cont) return;
+            const inputs = Array.from(cont.querySelectorAll('.prode-input-local, .prode-input-visitante'));
+            inputs.forEach((inp, idx) => {
+                inp.addEventListener('keydown', (e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    const siguiente = inputs[idx + 1];
+                    if (siguiente) { siguiente.focus(); siguiente.select(); }
+                    else guardarPrediccionesProde();
+                });
+            });
         }
 
 
@@ -4730,6 +4904,58 @@
             document.getElementById('modal-tip').classList.remove('hidden');
         }
 
+        let DEFERRED_INSTALL_PROMPT = null;
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            DEFERRED_INSTALL_PROMPT = e;
+            try {
+                if (localStorage.getItem('instalar_app_oculto') !== '1') {
+                    document.getElementById('banner-instalar-app').classList.remove('hidden');
+                }
+            } catch (err) { }
+        });
+
+        function instalarAppAndroid() {
+            if (!DEFERRED_INSTALL_PROMPT) return;
+            DEFERRED_INSTALL_PROMPT.prompt();
+            DEFERRED_INSTALL_PROMPT.userChoice.then(() => {
+                DEFERRED_INSTALL_PROMPT = null;
+                document.getElementById('banner-instalar-app').classList.add('hidden');
+            });
+        }
+
+        function cerrarBannerInstalar() {
+            document.getElementById('banner-instalar-app').classList.add('hidden');
+            try { localStorage.setItem('instalar_app_oculto', '1'); } catch (e) { }
+        }
+
+        window.addEventListener('appinstalled', () => {
+            document.getElementById('banner-instalar-app').classList.add('hidden');
+        });
+
+        function esIOS() {
+            return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+        }
+
+        function esStandalone() {
+            return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        }
+
+        function mostrarTipInstalarIOSSiCorresponde() {
+            if (!esIOS() || esStandalone()) return;
+            try { if (localStorage.getItem('tip_instalar_ios') === '1') return; } catch (e) { }
+            mostrarTipModal('instalar_ios', 'Para instalar Futsal Hub: tocá el ícono de Compartir (⬆️) en Safari y elegí "Agregar a pantalla de inicio".');
+        }
+
+        function registrarServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js').catch(() => { });
+                });
+            }
+        }
+
         function cerrarTipOnboarding(clave) {
             try { localStorage.setItem('tip_' + clave, '1'); } catch (e) { }
             document.getElementById('modal-tip').classList.add('hidden');
@@ -5092,6 +5318,8 @@
 
         cargarFavoritos();
         inicializarIdentidadProde();
+        actualizarBadgeProde();
+        registrarServiceWorker();
         precargarSponsorTemprano();
         cargarDatos();
     </script>

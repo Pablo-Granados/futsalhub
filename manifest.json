@@ -1,0 +1,19 @@
+{
+    "id": "/",
+    "name": "Futsal Hub",
+    "short_name": "Futsal Hub",
+    "description": "Resultados, tablas, estadísticas y PRODE de ARF Futsal.",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#0B0F14",
+    "theme_color": "#0B0F14",
+    "icons": [
+        {
+            "src": "/img/futsalhub-logo.png",
+            "sizes": "500x500",
+            "type": "image/png"
+        }
+    ]
+}
