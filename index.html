@@ -495,7 +495,7 @@
 
         function generarSelectorTemporada(temporadas) {
             const nav = document.getElementById('tabs-temporada');
-            const mostrarEnEstaVista = VISTA_ACTIVA !== 'equipos' && (VISTA_ACTIVA !== 'partidos' || CATEGORIA_ACTIVA !== 'Todas');
+            const mostrarEnEstaVista = VISTA_ACTIVA !== 'equipos' && VISTA_ACTIVA !== 'comunidad' && (VISTA_ACTIVA !== 'partidos' || CATEGORIA_ACTIVA !== 'Todas');
 
             if (temporadas.length <= 1 || !mostrarEnEstaVista) {
                 nav.classList.add('hidden');
@@ -1234,6 +1234,7 @@
         let PARTIDOS_FILTRO_ESTADO = 'porjugar';
         let TEMPORADA_ACTIVA = null; // usada por Partidos, Favoritos y Equipos
         let TEMPORADA_TABLA = null;  // exclusiva de la pestaña Tabla, no contamina el restolet CAMPEONES_TEMPORADA = {};
+        let TABLA_CONDICION = 'todos';
         let VISTA_ANTERIOR = null;
         let CAMPEONES_TEMPORADA = {};
         let CAMPEONES_MANUAL = [];
@@ -1283,7 +1284,7 @@
             document.getElementById('vista-contenido').classList.remove('hidden');
             document.getElementById('contador-vivos').classList.add('hidden');
 
-            document.getElementById('tabs-categorias').classList.toggle('hidden', VISTA_ACTIVA === 'equipos');
+            document.getElementById('tabs-categorias').classList.toggle('hidden', VISTA_ACTIVA === 'equipos' || VISTA_ACTIVA === 'comunidad');
 
             // Solo resetea a la temporada más reciente cuando VENÍS de Tabla hacia otra
             // pestaña — no en cada repintado dentro de la misma pestaña (eso pisaba
@@ -1302,11 +1303,44 @@
             else if (VISTA_ACTIVA === 'comunidad') renderComunidad();
         }
 
+        let COMUNIDAD_BANNER_INTERVALO = null;
+        let COMUNIDAD_BANNER_INDICE = 0;
+
         function renderComunidad() {
+            if (COMUNIDAD_BANNER_INTERVALO) { clearInterval(COMUNIDAD_BANNER_INTERVALO); COMUNIDAD_BANNER_INTERVALO = null; }
+
             document.getElementById('vista-contenido').innerHTML = `
     <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2">🏘️ Comunidad</h3>
+    <div id="banner-comunidad"></div>
     ${bloqueCardProde()}
     <p class="text-center text-muted text-sm py-16">Videos, noticias y más — en construcción.</p>
+  `;
+
+            if (SPONSORS.length) {
+                COMUNIDAD_BANNER_INDICE = 0;
+                pintarBannerComunidad();
+                if (SPONSORS.length > 1) {
+                    COMUNIDAD_BANNER_INTERVALO = setInterval(() => {
+                        if (VISTA_ACTIVA !== 'comunidad') { clearInterval(COMUNIDAD_BANNER_INTERVALO); COMUNIDAD_BANNER_INTERVALO = null; return; }
+                        COMUNIDAD_BANNER_INDICE = (COMUNIDAD_BANNER_INDICE + 1) % SPONSORS.length;
+                        pintarBannerComunidad();
+                    }, 15000);
+                }
+            }
+        }
+
+        function pintarBannerComunidad() {
+            const cont = document.getElementById('banner-comunidad');
+            if (!cont || !SPONSORS.length) return;
+            const s = SPONSORS[COMUNIDAD_BANNER_INDICE];
+            cont.innerHTML = `
+    <a href="${s.link_url || '#'}" target="_blank" rel="noopener" class="flex items-center gap-2 bg-surface border border-borde rounded-xl px-3 py-2.5 mb-3">
+      <img src="${s.imagen_url || ''}" alt="${escaparHtml(s.nombre || 'Sponsor')}" onerror="this.style.display='none'" class="w-8 h-8 rounded-lg object-contain bg-elevado flex-shrink-0"/>
+      <div class="min-w-0">
+        <p class="text-[9px] uppercase tracking-wide text-muted">Publicidad</p>
+        <p class="text-xs font-semibold text-texto truncate">${escaparHtml(s.nombre || 'Sponsor')}</p>
+      </div>
+    </a>
   `;
         }
 
@@ -1695,16 +1729,13 @@
         /* ============================================================
          *  VISTA: TABLA DE POSICIONES COMPLETA
          * ============================================================ */
-        function calcularTabla(categoria, fase, temporadaOverride) {
+        function calcularTabla(categoria, fase, temporadaOverride, condicion) {
             const faseObjetivo = fase || 'Regular';
             const partidosTemporada = temporadaOverride !== undefined
                 ? PARTIDOS.filter((p) => String(p.temporada) === String(temporadaOverride))
                 : filtrarPorTemporada(PARTIDOS);
-
             const finalizados = partidosTemporada.filter(
-                (p) => p.categoria === categoria &&
-                    normalizarEstado(p.estado) === 'finalizado' &&
-                    normalizarFase(p.fase) === faseObjetivo
+                (p) => p.categoria === categoria && normalizarEstado(p.estado) === 'finalizado' && normalizarFase(p.fase) === faseObjetivo
             );
 
             const stats = new Map();
@@ -1714,18 +1745,22 @@
             }
 
             finalizados.forEach((p) => {
-                const local = obtenerStats(String(p.id_local));
-                const visita = obtenerStats(String(p.id_visitante));
                 const gl = Number(p.goles_local) || 0;
                 const gv = Number(p.goles_visitante) || 0;
 
-                local.pj++; visita.pj++;
-                local.gf += gl; local.gc += gv;
-                visita.gf += gv; visita.gc += gl;
+                const actualizaLocal = !condicion || condicion === 'todos' || condicion === 'local';
+                const actualizaVisitante = !condicion || condicion === 'todos' || condicion === 'visitante';
 
-                if (gl > gv) { local.pg++; visita.pp++; }
-                else if (gl < gv) { visita.pg++; local.pp++; }
-                else { local.pe++; visita.pe++; }
+                if (actualizaLocal) {
+                    const local = obtenerStats(String(p.id_local));
+                    local.pj++; local.gf += gl; local.gc += gv;
+                    if (gl > gv) local.pg++; else if (gl < gv) local.pp++; else local.pe++;
+                }
+                if (actualizaVisitante) {
+                    const visita = obtenerStats(String(p.id_visitante));
+                    visita.pj++; visita.gf += gv; visita.gc += gl;
+                    if (gv > gl) visita.pg++; else if (gv < gl) visita.pp++; else visita.pe++;
+                }
             });
 
             const filas = Array.from(stats.entries()).map(([id, s]) => {
@@ -1735,13 +1770,13 @@
             });
 
             const temporadaParaAjustes = temporadaOverride !== undefined ? temporadaOverride : TEMPORADA_TABLA;
-            const ajustesAplicables = AJUSTES_PUNTOS.filter((a) =>
-                a.categoria === categoria && String(a.temporada) === String(temporadaParaAjustes)
-            );
-            ajustesAplicables.forEach((a) => {
-                const fila = filas.find((f) => String(f.id) === String(a.id_equipo));
-                if (fila) fila.pts += Number(a.puntos) || 0;
-            });
+            if (!condicion || condicion === 'todos') {
+                const ajustesAplicables = AJUSTES_PUNTOS.filter((a) => a.categoria === categoria && String(a.temporada) === String(temporadaParaAjustes));
+                ajustesAplicables.forEach((a) => {
+                    const fila = filas.find((f) => String(f.id) === String(a.id_equipo));
+                    if (fila) fila.pts += Number(a.puntos) || 0;
+                });
+            }
 
             filas.sort((a, b) => b.pts - a.pts || b.dif - a.dif || b.gf - a.gf);
             return filas;
@@ -1915,6 +1950,8 @@
             contenedor.innerHTML = chips + subChips + listaHtml;
         }
 
+
+
         function renderTabla() {
             const contenedor = document.getElementById('vista-contenido');
 
@@ -1933,7 +1970,13 @@
                 : '';
 
             const tip = tipOnboarding('tabla', 'Clickeá un equipo para ver sus últimos 5 resultados.');
-
+            const chipsCondicion = `
+    <div class="flex gap-2 mb-3">
+      <button onclick="cambiarCondicionTabla('todos')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${TABLA_CONDICION === 'todos' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Todos</button>
+      <button onclick="cambiarCondicionTabla('local')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${TABLA_CONDICION === 'local' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Como Local</button>
+      <button onclick="cambiarCondicionTabla('visitante')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${TABLA_CONDICION === 'visitante' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Como Visitante</button>
+    </div>
+  `;
             const partidosCategoria = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === categoriaParaTabla);
             const fasesPresentes = [...new Set(partidosCategoria.map((p) => normalizarFase(p.fase)))];
             const fasesOrdenables = fasesPresentes
@@ -1946,7 +1989,7 @@
             });
             bloques.forEach((b) => {
                 if (!b.esBracket) {
-                    b.filas = calcularTabla(categoriaParaTabla, b.fase);
+                    b.filas = calcularTabla(categoriaParaTabla, b.fase, undefined, TABLA_CONDICION);
                     b.ids = new Set(b.filas.map((f) => String(f.id)));
                 }
             });
@@ -2004,7 +2047,7 @@
             }
 
             let huboContenido = false;
-            let html = tip + aviso;
+            let html = tip + chipsCondicion + aviso;
 
             bloques.forEach((b, idx) => {
                 if (b.esBracket) {
@@ -2048,6 +2091,11 @@
             }
 
             contenedor.innerHTML = html;
+        }
+
+        function cambiarCondicionTabla(condicion) {
+            TABLA_CONDICION = condicion;
+            renderTabla();
         }
 
         function tablaHtml(filas, umbralDescenso) {
@@ -2653,21 +2701,29 @@
                 const cerrado = !seAceptaPrediccion(p);
                 const bloqueadaParaEditar = previa && !PRODE_EDITANDO.has(clave);
 
-                return `
+                const inputsDisabled = cerrado || bloqueadaParaEditar;
+
+    return `
       <div class="rounded-xl p-3 mb-2 transition-colors ${bloqueadaParaEditar ? 'bg-cancha opacity-60' : 'bg-elevado'}" data-prode-partido='${JSON.stringify({ id_local: p.id_local, id_visitante: p.id_visitante, fecha_nro: p.fecha_nro, clave })}'>
         <div class="flex items-center justify-between text-xs mb-2 gap-2">
-          <span class="truncate flex-1">${escaparHtml(local.nombre)}</span>
-          <span class="truncate flex-1 text-right">${escaparHtml(visitante.nombre)}</span>
+          <div class="flex items-center gap-1.5 min-w-0">
+            <img src="${local.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(local.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+            <span class="truncate">${escaparHtml(local.nombre)}</span>
+          </div>
+          <div class="flex items-center gap-1.5 min-w-0 justify-end">
+            <span class="truncate text-right">${escaparHtml(visitante.nombre)}</span>
+            <img src="${visitante.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(visitante.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
+          </div>
         </div>
         <div class="flex items-center justify-center gap-2">
-          <input type="number" min="0" class="prode-input-local w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_local : ''}" ${cerrado || bloqueadaParaEditar ? 'disabled' : ''}/>
+          <input type="number" min="0" class="prode-input-local w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_local : ''}" ${inputsDisabled ? 'disabled' : ''}/>
           <span class="text-muted text-sm">—</span>
-          <input type="number" min="0" class="prode-input-visitante w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_visitante : ''}" ${cerrado || bloqueadaParaEditar ? 'disabled' : ''}/>
+          <input type="number" min="0" class="prode-input-visitante w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_visitante : ''}" ${inputsDisabled ? 'disabled' : ''}/>
           ${previa && !cerrado
-                        ? (bloqueadaParaEditar
-                            ? `<button onclick='toggleEditarPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Editar">✏️</button>`
-                            : `<button onclick='guardarUnaPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Guardar">💾</button>`)
-                        : ''}
+            ? (bloqueadaParaEditar
+                ? `<button onclick='toggleEditarPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Editar">✏️</button>`
+                : `<button onclick='guardarUnaPrediccion(${JSON.stringify(clave)})' class="text-lg leading-none ml-1" title="Guardar">💾</button>`)
+            : ''}
         </div>
         ${previa && bloqueadaParaEditar ? `<p class="text-[10px] text-accent text-center mt-1.5">✓ Ya predijiste — tocá ✏️ para editar</p>` : ''}
         ${previa && !bloqueadaParaEditar ? `<p class="text-[10px] text-warning text-center mt-1.5">Editando…</p>` : ''}
@@ -2684,7 +2740,8 @@
         <button onclick="abrirRankingProde()" class="text-[11px] font-semibold text-accent uppercase tracking-wide">Ver ranking</button>
       </div>
     </div>
-    <p class="text-xs text-muted mb-3">${escaparHtml(NOMBRE_USUARIO)}</p>
+    <p class="text-xs text-muted mb-1">${escaparHtml(NOMBRE_USUARIO)}</p>
+    <p class="text-[10px] text-accent mb-3">${misPredicciones.size}/${partidos.length} partidos predichos</p>
     <button onclick="toggleSelectorJornadaProde()" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2.5 text-sm font-semibold text-texto mb-1 flex items-center justify-between">
       <span>Fecha ${PRODE_JORNADA_SELECCIONADA}</span>
       <span class="text-muted">▾</span>
@@ -2719,14 +2776,17 @@
 
         function seAceptaPrediccion(partido) {
             if (normalizarEstado(partido.estado) === 'finalizado') return false;
-            if (!partido.fecha) return true;
 
+            if (partido.fecha_hora) {
+                const fechaCorte = new Date(partido.fecha_hora.replace(' ', 'T') + ':00');
+                fechaCorte.setMinutes(fechaCorte.getMinutes() - 60);
+                return new Date() < fechaCorte;
+            }
+
+            if (!partido.fecha) return true;
             const hoyStr = new Date().toISOString().slice(0, 10);
             if (partido.fecha < hoyStr) return false;
             if (partido.fecha > hoyStr) return true;
-
-            // Es el mismo día — se acepta hasta las 18hs, según la hora local del navegador
-            // (el servidor vuelve a validar esto en serio antes de guardar).
             return new Date().getHours() < 18;
         }
 
@@ -2939,6 +2999,12 @@
                         estadoEl.className = 'text-center text-xs mt-2 text-live';
                     }
                 });
+        }
+
+        function ajustarMarcadorProde(btn, delta) {
+            const input = btn.parentElement.querySelector('input');
+            const nuevoValor = Math.max(0, (Number(input.value) || 0) + delta);
+            input.value = nuevoValor;
         }
 
         function verificarFechaCompletaYSugerir() {
@@ -3202,18 +3268,18 @@
             const items = predicciones.slice(pagina * PRODE_POR_PAGINA, pagina * PRODE_POR_PAGINA + PRODE_POR_PAGINA);
 
             const filas = items.map((pr) => {
-    const partido = porPartido.get(String(pr.id_local) + '_' + String(pr.id_visitante) + '_' + pr.fecha_nro);
-    const local = equipoInfo(pr.id_local);
-    const visitante = equipoInfo(pr.id_visitante);
-    const puntos = calcularPuntajePrediccion(pr, partido);
-    const finalizado = partido && normalizarEstado(partido.estado) === 'finalizado';
+                const partido = porPartido.get(String(pr.id_local) + '_' + String(pr.id_visitante) + '_' + pr.fecha_nro);
+                const local = equipoInfo(pr.id_local);
+                const visitante = equipoInfo(pr.id_visitante);
+                const puntos = calcularPuntajePrediccion(pr, partido);
+                const finalizado = partido && normalizarEstado(partido.estado) === 'finalizado';
 
-    let badge = `<span class="text-[10px] text-muted">Pendiente</span>`;
-    if (puntos === 3) badge = `<span class="text-xs font-bold text-accent">+3</span>`;
-    else if (puntos === 1) badge = `<span class="text-xs font-bold text-blue-400">+1</span>`;
-    else if (puntos === 0) badge = `<span class="text-xs font-bold text-live">0</span>`;
+                let badge = `<span class="text-[10px] text-muted">Pendiente</span>`;
+                if (puntos === 3) badge = `<span class="text-xs font-bold text-accent">+3</span>`;
+                else if (puntos === 1) badge = `<span class="text-xs font-bold text-blue-400">+1</span>`;
+                else if (puntos === 0) badge = `<span class="text-xs font-bold text-live">0</span>`;
 
-    return `
+                return `
       <div class="bg-elevado rounded-xl px-3 py-2 mb-2">
         <div class="flex items-center justify-between text-xs">
           <span class="text-[10px] text-muted w-12 flex-shrink-0">Fecha ${pr.fecha_nro}</span>
@@ -3230,7 +3296,7 @@
         ` : ''}
       </div>
     `;
-  }).join('');
+            }).join('');
 
             const paginacion = totalPaginas > 1 ? `
     <div class="flex items-center justify-between mt-2">
@@ -4494,7 +4560,7 @@
             return /zona/i.test(fase); // a diferencia de esFaseZona, NO incluye Copa de Plata
         }
 
-        function calcularTablaMultiFase(categoria, fases, temporadaOverride) {
+        function calcularTablaMultiFase(categoria, fases, temporadaOverride, condicion) {
             const partidosTemporada = temporadaOverride !== undefined
                 ? PARTIDOS.filter((p) => String(p.temporada) === String(temporadaOverride))
                 : filtrarPorTemporada(PARTIDOS);
