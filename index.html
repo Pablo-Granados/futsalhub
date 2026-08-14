@@ -114,7 +114,7 @@
     <div class="max-w-md mx-auto min-h-screen bg-cancha shadow-2xl shadow-black/50 relative">
 
         <!-- HEADER -->
-        <header class="sticky top-0 z-20 bg-cancha/95 backdrop-blur border-b border-borde lineas-cancha">
+        <header class="sticky top-0 z-20 bg-cancha/95 backdrop-blur border-b border-borde lineas-cancha" style="padding-top: env(safe-area-inset-top);">
             <div class="flex items-center justify-between px-4 pt-4">
                 <div id="app-title" class="select-none">
                     <p class="text-[11px] uppercase tracking-[0.2em] text-muted font-medium">Desarrollado por Pablo
@@ -5250,7 +5250,7 @@
         function registrarNavegacionParaSponsor() {
             if (!SPONSORS.length) return;
             CONTADOR_NAVEGACIONES++;
-            if (CONTADOR_NAVEGACIONES >= 10) {
+            if (CONTADOR_NAVEGACIONES >= 7) {
                 CONTADOR_NAVEGACIONES = 0;
                 GRANDE_SPONSOR_INDICE = (GRANDE_SPONSOR_INDICE + 1) % SPONSORS.length;
                 mostrarSponsorGrande(false);
