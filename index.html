@@ -249,14 +249,13 @@
         </div>
     </div>
 
-    <!-- BANNER DE INSTALACIÓN (Android/Chrome) -->
-    <div id="banner-instalar-app" class="hidden fixed inset-x-0 bottom-[108px] z-30 px-4 pb-1.5">
-        <div onclick="instalarAppAndroid()" class="flex items-center gap-2 bg-accent text-cancha rounded-xl px-3 py-2.5 cursor-pointer">
-            <span class="text-xl">📲</span>
-            <p class="text-xs font-semibold flex-1">Instalá Futsal Hub en tu celular</p>
-            <span class="text-xs font-bold underline">Instalar</span>
-            <button onclick="event.stopPropagation(); cerrarBannerInstalar()" class="text-lg leading-none px-1">✕</button>
-        </div>
+    <!-- BOTÓN FLOTANTE DE INSTALACIÓN (Android/Chrome) -->
+    <div id="banner-instalar-app" class="hidden fixed right-4 bottom-[112px] z-[80]">
+        <button onclick="instalarAppAndroid()" class="flex items-center gap-1.5 bg-accent text-cancha rounded-full pl-3 pr-2 py-2 shadow-lg shadow-black/40">
+            <span class="text-sm">📲</span>
+            <span class="text-xs font-bold whitespace-nowrap">Instalá la app</span>
+            <span onclick="event.stopPropagation(); cerrarBannerInstalar()" class="ml-1 w-4 h-4 flex items-center justify-center rounded-full bg-cancha/20 text-[10px] leading-none">✕</span>
+        </button>
     </div>
 
     <!-- MODAL DE INVITACIÓN AL PRODE (una sola vez) -->
