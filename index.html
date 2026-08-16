@@ -344,6 +344,11 @@
             'Femenino A|2025': ['Náutico', 'Unión Central'],
         };
 
+        const ASCENSOS_MANUALES = {
+            'Primera B|2023': ['Parquefield'],
+            'Primera B|2024': ['Sirio'],
+        };
+
         function tieneDescenso(categoria) {
             return CATEGORIAS_CON_DESCENSO.includes(categoria);
         }
@@ -687,6 +692,14 @@
             combos.forEach((combo) => {
                 const [categoria, temporada] = combo.split('||');
                 const { titulos, ascensos } = calcularTitulosCategoriaTemporada(categoria, temporada);
+
+                const claveAscensoManual = categoria + '|' + temporada;
+                (ASCENSOS_MANUALES[claveAscensoManual] || []).forEach((nombre) => {
+                    const equipoEncontrado = EQUIPOS.find((eq) => eq.categoria === categoria && normalizarClub(eq.nombre) === normalizarClub(nombre));
+                    if (!equipoEncontrado) return;
+                    const yaEsta = ascensos.some((a) => String(a.id) === String(equipoEncontrado.id_equipo));
+                    if (!yaEsta) ascensos.push({ id: equipoEncontrado.id_equipo, partidos: [] });
+                });
 
                 titulos.forEach((t) => {
                     const esCopaPlata = /copa de plata/i.test(t.fase);
@@ -1296,7 +1309,9 @@
 
         document.querySelectorAll('.btn-nav').forEach((btn) => {
             btn.addEventListener('click', () => {
-                VISTA_ACTIVA = btn.dataset.vista;
+                const vistaNueva = btn.dataset.vista;
+                if (vistaNueva !== VISTA_ACTIVA) resetearEstadoVista(VISTA_ACTIVA);
+                VISTA_ACTIVA = vistaNueva;
                 document.querySelectorAll('.btn-nav').forEach((b) => {
                     const activo = b.dataset.vista === VISTA_ACTIVA;
                     b.classList.toggle('text-accent', activo);
@@ -1323,22 +1338,35 @@
             document.getElementById('contador-vivos').classList.add('hidden');
 
             document.getElementById('tabs-categorias').classList.toggle('hidden', VISTA_ACTIVA === 'equipos' || VISTA_ACTIVA === 'comunidad');
-
-            // Solo resetea a la temporada más reciente cuando VENÍS de Tabla hacia otra
-            // pestaña — no en cada repintado dentro de la misma pestaña (eso pisaba
-            // la elección del usuario apenas la hacía).
-            if (VISTA_ANTERIOR === 'tabla' && VISTA_ACTIVA !== 'tabla') {
-                const temporadas = obtenerTemporadasDisponibles(CATEGORIA_ACTIVA);
-                TEMPORADA_ACTIVA = temporadas[0] || null;
-            }
-            VISTA_ANTERIOR = VISTA_ACTIVA;
-
-            generarSelectorTemporada(obtenerTemporadasDisponibles(CATEGORIA_ACTIVA));
+    const categoriaParaSelector = VISTA_ACTIVA === 'tabla' ? CATEGORIA_TABLA : CATEGORIA_ACTIVA;
+    generarTabsCategorias();
+    generarSelectorTemporada(obtenerTemporadasDisponibles(categoriaParaSelector));
 
             if (VISTA_ACTIVA === 'partidos') renderPartidos();
             else if (VISTA_ACTIVA === 'tabla') renderTabla();
             else if (VISTA_ACTIVA === 'equipos') renderEquipos();
             else if (VISTA_ACTIVA === 'comunidad') renderComunidad();
+        }
+
+        function resetearEstadoVista(vista) {
+            if (vista === 'partidos') {
+                CATEGORIA_ACTIVA = 'Todas';
+                JORNADA_ACTIVA = null;
+                VISTA_PARTIDOS_FILTRO = 'todos';
+                PARTIDOS_FILTRO_ESTADO = 'porjugar';
+                // PARTIDOS_BUSQUEDA queda intacta a propósito — el buscador se
+                // mantiene firme aunque navegues entre secciones.
+                const temporadas = obtenerTemporadasDisponibles();
+                TEMPORADA_ACTIVA = temporadas[0] || null;
+            } else if (vista === 'tabla') {
+                CATEGORIA_TABLA = 'Todas';
+                TABLA_CONDICION = 'todos';
+                const temporadas = obtenerTemporadasDisponibles();
+                TEMPORADA_TABLA = temporadas[0] || null;
+            } else if (vista === 'equipos') {
+                FILTRO_EQUIPOS = '';
+                EQUIPOS_PAGINA = 0;
+            }
         }
 
         let COMUNIDAD_BANNER_INTERVALO = null;
