@@ -107,6 +107,8 @@
     </style>
     <script defer src="https://cloud.umami.is/script.js"
         data-website-id="6e64ba6f-14db-4908-9251-0f9e83fbf2ce"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 
 <body class="bg-[#05070a] font-body text-texto">
@@ -114,7 +116,8 @@
     <div class="max-w-md mx-auto min-h-screen bg-cancha shadow-2xl shadow-black/50 relative">
 
         <!-- HEADER -->
-        <header class="sticky top-0 z-20 bg-cancha/95 backdrop-blur border-b border-borde lineas-cancha" style="padding-top: env(safe-area-inset-top);">
+        <header class="sticky top-0 z-20 bg-cancha/95 backdrop-blur border-b border-borde lineas-cancha"
+            style="padding-top: env(safe-area-inset-top);">
             <div class="flex items-center justify-between px-4 pt-4">
                 <div id="app-title" class="select-none">
                     <p class="text-[11px] uppercase tracking-[0.2em] text-muted font-medium">Desarrollado por Pablo
@@ -201,7 +204,8 @@
                 </button>
                 <button data-vista="comunidad"
                     class="btn-nav text-muted flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors relative">
-                    <span id="badge-prode-nuevo" class="hidden absolute top-1.5 right-[28%] w-2 h-2 rounded-full bg-live"></span>
+                    <span id="badge-prode-nuevo"
+                        class="hidden absolute top-1.5 right-[28%] w-2 h-2 rounded-full bg-live"></span>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -264,15 +268,6 @@
         </div>
     </div>
 
-        <!-- BANNER DE INSTALACIÓN (Android/Chrome) -->
-    <div id="banner-instalar-app" class="hidden fixed bottom-[108px] left-0 right-0 z-30 px-4 pb-1.5">
-        <a onclick="instalarAppAndroid()" class="flex items-center gap-2 bg-surface/95 backdrop-blur border border-borde rounded-xl px-3 py-2.5 max-w-md mx-auto cursor-pointer">
-            <span class="text-xl flex-shrink-0">📲</span>
-            <p class="text-xs font-semibold text-texto flex-1">Instalá Futsal Hub en tu celular</p>
-            <span class="text-xs font-bold text-accent uppercase flex-shrink-0">Instalar</span>
-            <span onclick="event.stopPropagation(); cerrarBannerInstalar()" class="text-muted text-lg leading-none px-1 flex-shrink-0">✕</span>
-        </a>
-    </div>
 
     <!-- BANNER FIJO DE SPONSOR (arriba de la barra de navegación, rota solo) -->
     <div id="banner-sponsor-fijo" class="hidden fixed bottom-[60px] left-0 right-0 z-30 px-4 pb-1.5"></div>
@@ -1125,6 +1120,7 @@
                 if (typeof json.visitas === 'number') mostrarContadorVisitas(json.visitas);
                 if (esPrimeraCarga) {
                     setTimeout(mostrarTipInstalarIOSSiCorresponde, 2000);
+                    setTimeout(mostrarTipInstalarAndroidSiCorresponde, 2000);
                     setTimeout(mostrarInvitacionProdeSiCorresponde, 6000);
                 }
             } catch (err) {
@@ -1263,6 +1259,7 @@
         let EQUIPOS = [];
         let EQUIPOS_POR_ID = new Map();
         let PARTIDOS = [];
+        let PARTIDOS_BUSQUEDA = '';
         let JUGADORES_POR_EQUIPO = new Map();
         let CATEGORIA_ACTIVA = 'Todas';
         let CATEGORIA_TABLA = 'Todas';
@@ -1272,6 +1269,7 @@
         let TEMPORADA_ACTIVA = null; // usada por Partidos, Favoritos y Equipos
         let TEMPORADA_TABLA = null;  // exclusiva de la pestaña Tabla, no contamina el restolet CAMPEONES_TEMPORADA = {};
         let TABLA_CONDICION = 'todos';
+        let ULTIMO_HTML_TABLA_EXPORTABLE = '';
         let VISTA_ANTERIOR = null;
         let CAMPEONES_TEMPORADA = {};
         let CAMPEONES_MANUAL = [];
@@ -1539,6 +1537,7 @@
         }
 
         function renderPartidos() {
+            const buscador = bloqueBuscadorPartidos();
             const chips = FAVORITOS.size > 0 ? `
     <div class="flex gap-2 mb-3">
       <button onclick="cambiarFiltroPartidos('todos')" class="text-xs font-semibold px-3 py-1.5 rounded-full border ${VISTA_PARTIDOS_FILTRO === 'todos' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Todos</button>
@@ -1546,8 +1545,13 @@
     </div>
   ` : '';
 
+            if (PARTIDOS_BUSQUEDA.trim()) {
+                renderPartidosBusqueda(buscador + chips);
+                return;
+            }
+
             if (VISTA_PARTIDOS_FILTRO === 'favoritos' && FAVORITOS.size > 0) {
-                renderPartidosFavoritos(chips);
+                renderPartidosFavoritos(buscador + chips);
                 return;
             }
 
@@ -1557,30 +1561,26 @@
                 const fijados = bloquePartidosFijados();
                 const destacados = bloqueDestacados();
                 const enVivoFijados = calcularPartidosFijados().filter((p) => normalizarEstado(p.estado) === 'vivo').length;
-                contenedor.innerHTML = chips + tip + fijados + (destacados || (fijados ? '' : `<p class="text-center text-muted text-sm py-16">Todavía no hay partidos programados.</p>`));
+                contenedor.innerHTML = buscador + chips + tip + fijados + (destacados || (fijados ? '' : `<p class="text-center text-muted text-sm py-16">Todavía no hay partidos programados.</p>`));
                 actualizarContadorVivos(enVivoFijados);
+                configurarBuscadorPartidos();
                 return;
             }
-
             const partidosTemporada = filtrarPorTemporada(PARTIDOS).filter((p) => {
                 const fase = normalizarFase(p.fase);
                 return fase === 'Regular' || esFaseZonaEstricta(fase);
             });
             const filtradosPorCategoria = partidosTemporada.filter((p) => p.categoria === CATEGORIA_ACTIVA);
-
             const jornadasDisponibles = obtenerJornadasDisponibles(filtradosPorCategoria);
-
             if (!jornadasDisponibles.length) {
-                pintarListaPartidos(filtradosPorCategoria, null, [], filtradosPorCategoria, chips);
+                pintarListaPartidos(filtradosPorCategoria, null, [], filtradosPorCategoria, buscador + chips);
                 return;
             }
-
             if (JORNADA_ACTIVA === null || !jornadasDisponibles.includes(JORNADA_ACTIVA)) {
                 JORNADA_ACTIVA = elegirJornadaPorDefecto(jornadasDisponibles, filtradosPorCategoria);
             }
-
             const partidosDeLaJornada = filtradosPorCategoria.filter((p) => Number(p.fecha_nro) === JORNADA_ACTIVA);
-            pintarListaPartidos(partidosDeLaJornada, JORNADA_ACTIVA, jornadasDisponibles, filtradosPorCategoria, chips);
+            pintarListaPartidos(partidosDeLaJornada, JORNADA_ACTIVA, jornadasDisponibles, filtradosPorCategoria, buscador + chips);
         }
 
         function pintarListaPartidos(lista, jornadaActiva, jornadasDisponibles, listaCategoriaCompleta, chips) {
@@ -1663,6 +1663,7 @@
                     renderPartidos();
                 });
             }
+            configurarBuscadorPartidos();
         }
 
         function cambiarJornada(delta) {
@@ -1675,6 +1676,41 @@
                 JORNADA_ACTIVA = jornadas[idx];
                 renderPartidos();
             }
+        }
+
+        function bloqueBuscadorPartidos() {
+            return `<input id="buscador-partidos" type="text" value="${escaparHtml(PARTIDOS_BUSQUEDA)}" placeholder="Buscar equipo…" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2.5 text-sm text-texto placeholder:text-muted mb-3"/>`;
+        }
+
+        function configurarBuscadorPartidos() {
+            const input = document.getElementById('buscador-partidos');
+            if (!input) return;
+            input.addEventListener('input', (e) => {
+                PARTIDOS_BUSQUEDA = e.target.value;
+                renderPartidos();
+                const nuevo = document.getElementById('buscador-partidos');
+                if (nuevo) { nuevo.focus(); nuevo.setSelectionRange(nuevo.value.length, nuevo.value.length); }
+            });
+        }
+
+        function renderPartidosBusqueda(cabecera) {
+            const q = PARTIDOS_BUSQUEDA.trim().toLowerCase();
+            const partidosTemporada = filtrarPorTemporada(PARTIDOS).filter((p) => normalizarFase(p.fase) === 'Regular');
+            const coincidencias = partidosTemporada
+                .filter((p) => {
+                    const local = equipoInfo(p.id_local).nombre.toLowerCase();
+                    const visitante = equipoInfo(p.id_visitante).nombre.toLowerCase();
+                    return local.includes(q) || visitante.includes(q);
+                })
+                .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || Number(a.fecha_nro) - Number(b.fecha_nro));
+
+            actualizarContadorVivos(coincidencias.filter((p) => normalizarEstado(p.estado) === 'vivo').length);
+
+            const contenedor = document.getElementById('vista-contenido');
+            contenedor.innerHTML = cabecera + (coincidencias.length
+                ? renderPaginaAgrupadaPorCategoria(coincidencias)
+                : `<p class="text-center text-muted text-sm py-16">No se encontraron partidos para "${escaparHtml(PARTIDOS_BUSQUEDA)}".</p>`);
+            configurarBuscadorPartidos();
         }
 
         function cambiarFiltroEstadoPartidos(valor) {
@@ -2068,9 +2104,8 @@
 
             actualizarContadorVivos(cantidadEnVivo);
             contenedor.innerHTML = chips + subChips + listaHtml;
+            configurarBuscadorPartidos();
         }
-
-
 
         function renderTabla() {
             const contenedor = document.getElementById('vista-contenido');
@@ -2166,39 +2201,60 @@
                 }
             }
 
+            const botonExportarTabla = `
+    <div class="flex gap-2 mb-3">
+      <button onclick="compartirTablaPorWhatsApp()" class="flex-1 flex items-center justify-center gap-2 bg-[#25D366] rounded-xl py-2 text-xs font-semibold text-white">
+        ${iconoWhatsApp(14)} WhatsApp
+      </button>
+      <button onclick="abrirMenuExportarTabla()" class="flex-1 flex items-center justify-center gap-2 bg-sky-500 rounded-xl py-2 text-xs font-semibold text-white">
+        <span>⬇️</span> Exportar
+      </button>
+    </div>
+  `;
+
             let huboContenido = false;
-            let html = tip + chipsCondicion + aviso;
+            let html = tip + botonExportarTabla + chipsCondicion + aviso;
+
+            // Versión "limpia" para exportar: título de contexto + tablas/detalle,
+            // sin los brackets de Copa de Oro/Playoff ni los controles de la UI.
+            let htmlExportable = `<h2 class="font-display text-lg tracking-wide mb-3 text-texto">${escaparHtml(categoriaParaTabla)} — Temporada ${escaparHtml(String(TEMPORADA_TABLA || ''))}</h2>`;
 
             bloques.forEach((b, idx) => {
                 if (b.esBracket) {
                     html += renderBracketFase(categoriaParaTabla, b.fase);
                     huboContenido = true;
-                    return;
+                    return; // no se agrega a htmlExportable
                 }
                 if (!b.filas.length) return;
                 huboContenido = true;
-                const umbralRegular = (b.fase === 'Regular' && debeDescensoEnRegular)
+                const esRegular = b.fase === 'Regular';
+                const umbralRegular = (esRegular && debeDescensoEnRegular)
                     ? b.filas.length - Math.min(CANTIDAD_DESCENSO_GENERAL, b.filas.length)
                     : undefined;
-                const enCurso = b.fase === 'Regular' && temporadaEnCurso(categoriaParaTabla, TEMPORADA_TABLA);
-                html += bloqueTablaFase(b.titulo, b.filas, b.fase, asignaciones.get(idx) || [], umbralRegular, enCurso, categoriaParaTabla, TEMPORADA_TABLA);
+                const enCurso = esRegular && temporadaEnCurso(categoriaParaTabla, TEMPORADA_TABLA);
+                const bloqueHtml = bloqueTablaFase(b.titulo, b.filas, b.fase, asignaciones.get(idx) || [], umbralRegular, enCurso, categoriaParaTabla, TEMPORADA_TABLA, TABLA_CONDICION);
+                html += bloqueHtml;
+                if (esRegular) htmlExportable += bloqueHtml; // solo Fase Regular entra en la exportación
 
-                if (b.fase === 'Regular' && umbralRegular != null) {
+                if (esRegular && umbralRegular != null) {
                     const claveOverride = categoriaParaTabla + '|' + TEMPORADA_TABLA;
                     const equiposOverride = DESCENSOS_MANUALES[claveOverride];
                     if (equiposOverride) {
-                        html += `<p class="text-[10px] text-live px-1 mb-3">Se jugó un triangular por igualdad de puntos — el descenso restante fue de ${escaparHtml(equiposOverride.join(', '))}.</p>`;
+                        const captionTriangular = `<p class="text-[10px] text-live px-1 mb-3">Se jugó un triangular por igualdad de puntos — el descenso restante fue de ${escaparHtml(equiposOverride.join(', '))}.</p>`;
+                        html += captionTriangular;
+                        htmlExportable += captionTriangular;
                     }
                 }
-                if (b.fase === 'Regular' && captionRegular) html += captionRegular;
-                if (zc && b.fase === zc.fase && captionZC) html += captionZC;
+                if (esRegular && captionRegular) html += captionRegular; // solo pantalla, no exportación
+                if (zc && b.fase === zc.fase && captionZC) html += captionZC; // solo pantalla, no exportación
             });
 
             if (sinAsignar.length) {
-                html += `
+                const bloqueDesempate = `
       <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mt-4 mb-2">Desempate</h3>
       <div class="space-y-2 mb-2">${sinAsignar.map(tarjetaDesempate).join('')}</div>
     `;
+                html += bloqueDesempate;
                 huboContenido = true;
             }
 
@@ -2210,6 +2266,7 @@
                 html += `<p class="text-center text-muted text-sm py-16">Todavía no hay partidos finalizados en esta categoría.</p>`;
             }
 
+            ULTIMO_HTML_TABLA_EXPORTABLE = htmlExportable;
             contenedor.innerHTML = html;
         }
 
@@ -2249,7 +2306,7 @@
   `;
         }
 
-        function bloqueTablaFase(titulo, filas, fase, desempates, umbralDescenso, enCurso, categoriaFase, temporadaFase) {
+        function bloqueTablaFase(titulo, filas, fase, desempates, umbralDescenso, enCurso, categoriaFase, temporadaFase, condicionFase) {
             let extra = '';
             let campeonId = null;
 
@@ -2299,8 +2356,13 @@
                 }).join('')
                 : '';
 
+            const sufijoCondicion = condicionFase === 'local' ? ' · Local' : condicionFase === 'visitante' ? ' · Visitante' : '';
+            const tituloConContexto = titulo && titulo.includes('Fase Regular')
+                ? `${titulo} — ${escaparHtml(categoriaFase || '')} ${escaparHtml(String(temporadaFase || ''))}${sufijoCondicion}`
+                : titulo;
+
             return `
-    ${titulo ? `<h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mt-4 mb-2">${escaparHtml(titulo)}</h3>` : ''}
+    ${titulo ? `<h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mt-4 mb-2 flex items-center justify-between"><span>${tituloConContexto}</span></h3>` : ''}
     ${tablaHtml(filas, umbralDescenso)}
     ${captionDescenso}
     ${captionAjustes}
@@ -2930,6 +2992,18 @@
             });
         }
 
+        function configurarBusquedaProde() {
+            const input = document.getElementById('prode-busqueda-input');
+            if (!input) return;
+            input.addEventListener('input', (e) => {
+                PRODE_BUSQUEDA = e.target.value;
+                PRODE_RANKING_PAGINA = 0;
+                if (PRODE_RANKING_VISTA === 'participantes') renderParticipantesProde(); else renderRankingProde();
+                const nuevo = document.getElementById('prode-busqueda-input');
+                if (nuevo) { nuevo.focus(); nuevo.setSelectionRange(nuevo.value.length, nuevo.value.length); }
+            });
+        }
+
 
 
         function toggleEditarPrediccion(clave) {
@@ -3224,6 +3298,7 @@
         }
 
         let PRODE_RANKING_VISTA = 'fecha';
+        let PRODE_BUSQUEDA = '';
         let PRODE_RANKING_JORNADA = null;
         let PRODE_RANKING_PAGINA = 0;
         let PRODE_DETALLE_PAGINA = 0;
@@ -3286,20 +3361,22 @@
             const jornadasDisponiblesTodas = obtenerJornadasDisponibles(
                 filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular')
             );
-
             if (PRODE_RANKING_JORNADA == null) {
                 PRODE_RANKING_JORNADA = PRODE_JORNADA_SELECCIONADA || jornadasDisponiblesTodas[jornadasDisponiblesTodas.length - 1];
             }
-
-            const rankingCompleto = PRODE_RANKING_VISTA === 'fecha'
+            let rankingCompleto = PRODE_RANKING_VISTA === 'fecha'
                 ? calcularRankingProde(PRODE_RANKING_JORNADA)
                 : calcularRankingProde(null);
+
+            if (PRODE_BUSQUEDA.trim()) {
+                const q = PRODE_BUSQUEDA.trim().toLowerCase();
+                rankingCompleto = rankingCompleto.filter((r) => r.nombre.toLowerCase().includes(q) || (r.club || '').toLowerCase().includes(q));
+            }
 
             const totalPaginas = Math.max(1, Math.ceil(rankingCompleto.length / 10));
             const paginaRanking = Math.min(Math.max(PRODE_RANKING_PAGINA, 0), totalPaginas - 1);
             const inicio = paginaRanking * 10;
             const ranking = rankingCompleto.slice(inicio, inicio + 10);
-
             const idx = jornadasDisponiblesTodas.indexOf(PRODE_RANKING_JORNADA);
             const navegadorFecha = PRODE_RANKING_VISTA === 'fecha' ? `
     <div class="flex items-center justify-between mb-3">
@@ -3312,18 +3389,15 @@
       </button>
     </div>
   ` : '';
-
             const medalla = (posicion) => {
                 if (posicion === 1) return '🏆 ';
                 if (posicion === 2) return '🥈 ';
                 if (posicion === 3) return '🥉 ';
                 return '';
             };
-
             if (PRODE_RANKING_VISTA === 'participantes') {
                 return renderParticipantesProde();
             }
-
             const filas = ranking.length
                 ? ranking.map((r, i) => {
                     const posicion = inicio + i + 1;
@@ -3345,8 +3419,7 @@
         </button>
       `;
                 }).join('')
-                : `<p class="text-center text-muted text-sm py-8">Todavía no hay puntos calculados${PRODE_RANKING_VISTA === 'fecha' ? ' para esta fecha' : ''}.</p>`;
-
+                : `<p class="text-center text-muted text-sm py-8">Sin resultados${PRODE_BUSQUEDA.trim() ? ` para "${escaparHtml(PRODE_BUSQUEDA)}"` : (PRODE_RANKING_VISTA === 'fecha' ? ' para esta fecha' : '')}.</p>`;
             const paginacionRanking = totalPaginas > 1 ? `
     <div class="flex items-center justify-between mt-2">
       <button onclick="cambiarPaginaRankingProde(-1)" class="p-1.5 text-muted disabled:opacity-25" ${paginaRanking <= 0 ? 'disabled' : ''}>
@@ -3358,7 +3431,6 @@
       </button>
     </div>
   ` : '';
-
             document.getElementById('modal-contenido').innerHTML = `
     <div class="flex items-center justify-between mb-1">
       <h2 class="font-display text-lg tracking-wide">🏆 Ranking</h2>
@@ -3369,11 +3441,13 @@
       <button onclick="cambiarVistaRankingProde('global')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'global' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Global</button>
       <button onclick="cambiarVistaRankingProde('participantes')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'participantes' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Participantes</button>
     </div>
+    <input id="prode-busqueda-input" type="text" value="${escaparHtml(PRODE_BUSQUEDA)}" placeholder="Buscar participante…" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2 text-xs text-texto placeholder:text-muted mb-3"/>
     ${navegadorFecha}
     <p class="text-[10px] text-muted mb-3">🎯 Resultado exacto (3 pts) · ✓ Acierto sin marcador (1 pt) — tocá un nombre para ver el detalle</p>
     ${filas}
     ${paginacionRanking}
   `;
+            configurarBusquedaProde();
         }
 
         function renderParticipantesProde() {
@@ -3384,8 +3458,12 @@
                     nombresUnicos.set(clave, { dispositivo_id: clave, nombre: pr.nombre_apellido, club: pr.club_hincha || '' });
                 }
             });
+            let lista = Array.from(nombresUnicos.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
-            const lista = Array.from(nombresUnicos.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+            if (PRODE_BUSQUEDA.trim()) {
+                const q = PRODE_BUSQUEDA.trim().toLowerCase();
+                lista = lista.filter((p) => p.nombre.toLowerCase().includes(q) || (p.club || '').toLowerCase().includes(q));
+            }
 
             const filas = lista.length
                 ? lista.map((p) => `
@@ -3398,8 +3476,7 @@
                         : (p.club ? `<img src="${escudoClubPorNombre(p.club)}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(p.club)}');" class="w-4 h-4 rounded-full object-cover bg-elevado flex-shrink-0" title="${escaparHtml(p.club)}"/>` : '')}
         </button>
       `).join('')
-                : `<p class="text-center text-muted text-sm py-8">Todavía no hay participantes.</p>`;
-
+                : `<p class="text-center text-muted text-sm py-8">${PRODE_BUSQUEDA.trim() ? `No se encontraron participantes para "${escaparHtml(PRODE_BUSQUEDA)}".` : 'Todavía no hay participantes.'}</p>`;
             document.getElementById('modal-contenido').innerHTML = `
     <div class="flex items-center justify-between mb-1">
       <h2 class="font-display text-lg tracking-wide">🏆 Ranking</h2>
@@ -3410,9 +3487,11 @@
       <button onclick="cambiarVistaRankingProde('global')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border bg-transparent text-muted border-borde">Global</button>
       <button onclick="cambiarVistaRankingProde('participantes')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border bg-accent text-cancha border-accent">Participantes</button>
     </div>
+    <input id="prode-busqueda-input" type="text" value="${escaparHtml(PRODE_BUSQUEDA)}" placeholder="Buscar participante…" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2 text-xs text-texto placeholder:text-muted mb-3"/>
     <p class="text-[10px] text-muted mb-3">${lista.length} jugando · orden alfabético</p>
     ${filas}
   `;
+            configurarBusquedaProde();
         }
 
         function cambiarPaginaRankingProde(delta) {
@@ -3724,9 +3803,12 @@
 
     <div class="flex items-center justify-between mb-1">
       <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold">Forma · últimos 5${etiquetaTemporadaForma(forma)}</h3>
-      ${forma.length ? `<button onclick='compartirWhatsApp(${JSON.stringify(textoCompartirForma(equipo, forma))})' class="text-muted flex-shrink-0" title="Compartir">
-        ${iconoWhatsApp(16)}
-      </button>` : ''}
+      ${forma.length ? `<div class="flex items-center gap-2 flex-shrink-0" data-html2canvas-ignore="true">
+        <button onclick='compartirWhatsAppConImagen(${JSON.stringify(textoCompartirForma(equipo, forma))}, "modal-contenido", "forma_${idEquipo}")' class="text-muted" title="Compartir">
+          ${iconoWhatsApp(16)}
+        </button>
+        <button onclick="abrirMenuExportar('modal-contenido', 'forma_${idEquipo}')" class="text-muted" title="Exportar">⬇️</button>
+      </div>` : ''}
     </div>
     ${forma.length
                     ? `<div class="space-y-2.5 mb-5 mt-2">${forma.map(filaForma).join('')}</div>`
@@ -3850,9 +3932,12 @@
       </div>
       <div class="flex flex-col items-center gap-1 flex-shrink-0">
         ${encabezadoMarcador}
-        <button onclick='compartirWhatsApp(${JSON.stringify(textoCompartirResultado)})' class="text-muted mt-1" title="Compartir resultado">
-          ${iconoWhatsApp(16)}
-        </button>
+        <div class="flex items-center gap-2 mt-1" data-html2canvas-ignore="true">
+          <button onclick='compartirWhatsAppConImagen(${JSON.stringify(textoCompartirResultado)}, "modal-contenido", "historial_${idLocal}_vs_${idVisitante}")' class="text-muted" title="Compartir resultado">
+            ${iconoWhatsApp(16)}
+          </button>
+          <button onclick="abrirMenuExportar('modal-contenido', 'historial_${idLocal}_vs_${idVisitante}')" class="text-muted" title="Exportar">⬇️</button>
+        </div>
       </div>
       <div class="flex flex-col items-center gap-1.5 w-24">
         <img src="${equipoB.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipoB.nombre)}');" class="w-12 h-12 rounded-xl object-cover bg-elevado cursor-pointer" data-abrir-perfil="${idVisitante}" data-volver-h2h="1"/>
@@ -3867,12 +3952,7 @@
         <div><p class="font-mono text-lg font-semibold text-warning">${empates}</p><p class="text-[10px] text-muted uppercase">Empates</p></div>
         <div><p class="font-mono text-lg font-semibold text-live">${ganoB}</p><p class="text-[10px] text-muted uppercase">Ganó ${escaparHtml(equipoB.nombre)}</p></div>
       </div>
-      <div class="flex items-center justify-between mb-2">
-        <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold">Historial de enfrentamientos</h3>
-        <button onclick='compartirWhatsApp(${JSON.stringify(`📊 Historial ${equipoA.nombre} vs ${equipoB.nombre}: ${ganoA} victorias de ${equipoA.nombre}, ${empates} empates, ${ganoB} victorias de ${equipoB.nombre}.\n\nVer todo 👉 ` + window.location.href)})' class="text-muted flex-shrink-0" title="Compartir historial">
-          ${iconoWhatsApp(15)}
-        </button>
-      </div>
+      <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold text-center mb-2">Historial de enfrentamientos</h3>
       <div id="h2h-lista"></div>
       <div id="h2h-paginacion" class="flex items-center justify-between mt-3"></div>
     ` : `<p class="text-xs text-muted text-center py-6">Todavía no se enfrentaron en esta categoría.</p>`}
@@ -4112,10 +4192,13 @@
         <h2 class="font-display text-xl tracking-wide truncate">${escaparHtml(referencia.nombre)}</h2>
         <span class="text-[11px] text-muted uppercase tracking-wide">${escaparHtml(etiquetaCategoria)}</span>
       </div>
-      <button onclick='compartirWhatsApp(${JSON.stringify(textoCompartirEstadisticas(referencia, etiquetaCategoria, d))})' class="text-muted">
-  ${iconoWhatsApp(16)}
-</button>
-      <button onclick="toggleFavoritoClick()" title="Marcar favorito" class="text-2xl flex-shrink-0 leading-none">${esFavorito(CLUB_PERFIL_ACTUAL) ? '⭐' : '☆'}</button>
+      <div class="flex items-center gap-2 flex-shrink-0" data-html2canvas-ignore="true">
+        <button onclick='compartirWhatsAppConImagen(${JSON.stringify(textoCompartirEstadisticas(referencia, etiquetaCategoria, d))}, "modal-contenido", "estadisticas_${referencia.id_equipo}")' class="text-muted">
+          ${iconoWhatsApp(16)}
+        </button>
+        <button onclick="abrirMenuExportar('modal-contenido', 'estadisticas_${referencia.id_equipo}')" class="text-muted" title="Exportar">⬇️</button>
+        <button onclick="toggleFavoritoClick()" title="Marcar favorito" class="text-2xl leading-none">${esFavorito(CLUB_PERFIL_ACTUAL) ? '⭐' : '☆'}</button>
+      </div>
     </div>
 
     ${filtros}
@@ -4479,9 +4562,9 @@
             <span class="truncate flex-1 text-right">${escaparHtml(visitante.nombre)}</span>
           </div>
           <div class="flex items-center justify-center gap-2 mb-2">
-            <input type="number" min="0" class="admin-edit-input-local w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" value="${p.goles_local ?? ''}"/>
+            <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="admin-edit-input-local w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" value="${p.goles_local ?? ''}"/>
             <span class="text-muted text-sm">—</span>
-            <input type="number" min="0" class="admin-edit-input-visitante w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" value="${p.goles_visitante ?? ''}"/>
+            <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="admin-edit-input-visitante w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" value="${p.goles_visitante ?? ''}"/>
           </div>
           <label class="text-[9px] uppercase text-muted">Fecha del partido</label>
           <input type="date" class="admin-edit-input-fecha w-full mt-1 bg-cancha border border-borde rounded-lg py-1.5 px-2 text-xs text-texto" value="${p.fecha || ''}"/>
@@ -4654,9 +4737,9 @@
             <span class="truncate flex-1 text-right">${escaparHtml(visitante.nombre)}</span>
           </div>
           <div class="flex items-center justify-center gap-2">
-            <input type="number" min="0" class="admin-input-local w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" placeholder="-"/>
+            <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="admin-input-local w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" placeholder="-"/>
             <span class="text-muted text-sm">—</span>
-            <input type="number" min="0" class="admin-input-visitante w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" placeholder="-"/>
+            <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="admin-input-visitante w-12 text-center bg-cancha border border-borde rounded-lg py-1.5 text-sm font-semibold text-texto" placeholder="-"/>
           </div>
         </div>
       `;
@@ -4903,36 +4986,6 @@
             document.getElementById('modal-tip').classList.remove('hidden');
         }
 
-        let DEFERRED_INSTALL_PROMPT = null;
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            DEFERRED_INSTALL_PROMPT = e;
-            try {
-                if (localStorage.getItem('instalar_app_oculto') !== '1') {
-                    document.getElementById('banner-instalar-app').classList.remove('hidden');
-                }
-            } catch (err) { }
-        });
-
-        function instalarAppAndroid() {
-            if (!DEFERRED_INSTALL_PROMPT) return;
-            DEFERRED_INSTALL_PROMPT.prompt();
-            DEFERRED_INSTALL_PROMPT.userChoice.then(() => {
-                DEFERRED_INSTALL_PROMPT = null;
-                document.getElementById('banner-instalar-app').classList.add('hidden');
-            });
-        }
-
-        function cerrarBannerInstalar() {
-            document.getElementById('banner-instalar-app').classList.add('hidden');
-            try { localStorage.setItem('instalar_app_oculto', '1'); } catch (e) { }
-        }
-
-        window.addEventListener('appinstalled', () => {
-            document.getElementById('banner-instalar-app').classList.add('hidden');
-        });
-
         function esIOS() {
             return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
         }
@@ -4945,6 +4998,16 @@
             if (!esIOS() || esStandalone()) return;
             try { if (localStorage.getItem('tip_instalar_ios') === '1') return; } catch (e) { }
             mostrarTipModal('instalar_ios', 'Para instalar Futsal Hub: tocá el ícono de Compartir (⬆️) en Safari y elegí "Agregar a pantalla de inicio".');
+        }
+
+        function esAndroid() {
+            return /android/i.test(navigator.userAgent);
+        }
+
+        function mostrarTipInstalarAndroidSiCorresponde() {
+            if (!esAndroid() || esStandalone()) return;
+            try { if (localStorage.getItem('tip_instalar_android') === '1') return; } catch (e) { }
+            mostrarTipModal('instalar_android', 'Para instalar Futsal Hub: tocá el menú ⋮ de Chrome (arriba a la derecha) y elegí "Instalar aplicación" o "Añadir a pantalla de inicio".');
         }
 
         function registrarServiceWorker() {
@@ -4969,6 +5032,152 @@
         function compartirWhatsApp(texto) {
             const url = 'https://wa.me/?text=' + encodeURIComponent(texto);
             window.open(url, '_blank');
+        }
+
+        async function compartirWhatsAppConImagen(texto, idElementoCaptura, nombreArchivo) {
+            try {
+                const canvas = await capturarElementoComoCanvas(idElementoCaptura);
+                const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+                const archivo = new File([blob], (nombreArchivo || 'futsalhub') + '.png', { type: 'image/png' });
+
+                if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+                    await navigator.share({ files: [archivo], text: texto });
+                    return;
+                }
+            } catch (e) { /* si falla la imagen o el share, caemos al texto solo */ }
+
+            compartirWhatsApp(texto);
+        }
+
+        let EXPORTAR_ID_ELEMENTO = null;
+        let EXPORTAR_NOMBRE_ARCHIVO = null;
+
+        function abrirMenuExportar(idElemento, nombreArchivo) {
+            EXPORTAR_ID_ELEMENTO = idElemento;
+            EXPORTAR_NOMBRE_ARCHIVO = nombreArchivo;
+            document.getElementById('exportar-estado').textContent = '';
+            const modal = document.getElementById('modal-exportar');
+            modal.style.zIndex = '999999';
+            modal.style.position = 'fixed';
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+        }
+
+        function prepararContenedorTablaExportable() {
+            let cont = document.getElementById('export-tabla-temp');
+            if (cont) cont.remove();
+            cont = document.createElement('div');
+            cont.id = 'export-tabla-temp';
+            cont.style.position = 'fixed';
+            cont.style.left = '-9999px';
+            cont.style.top = '0';
+            cont.style.width = '400px';
+            cont.className = 'bg-cancha p-6';
+            cont.innerHTML = ULTIMO_HTML_TABLA_EXPORTABLE;
+            document.body.appendChild(cont);
+
+            const categoriaArchivo = CATEGORIA_TABLA === 'Todas' ? 'tabla' : CATEGORIA_TABLA.replace(/\s+/g, '_');
+            return `tabla_${categoriaArchivo}_${TEMPORADA_TABLA || ''}`;
+        }
+
+        function abrirMenuExportarTabla() {
+            const nombreArchivo = prepararContenedorTablaExportable();
+            abrirMenuExportar('export-tabla-temp', nombreArchivo);
+        }
+
+        function compartirTablaPorWhatsApp() {
+            const nombreArchivo = prepararContenedorTablaExportable();
+            const texto = `📋 Tabla de posiciones — ${CATEGORIA_TABLA} ${TEMPORADA_TABLA || ''}\n\nMirá todo en FutsalHub 👉 ${window.location.href}`;
+            compartirWhatsAppConImagen(texto, 'export-tabla-temp', nombreArchivo);
+        }
+
+        function cerrarMenuExportar() {
+            const modal = document.getElementById('modal-exportar');
+            modal.classList.add('hidden');
+            modal.style.display = '';
+        }
+
+        async function capturarElementoComoCanvas(idElemento) {
+            const el = document.getElementById(idElemento);
+            if (!el) throw new Error('No se encontró el contenido a exportar.');
+
+            // Padding + ancho temporales solo para la captura — dan más aire real
+            // a las filas de texto largo (como el historial H2H), en vez de que el
+            // padding les robe espacio y corte los nombres. Se revierte apenas termina.
+            const paddingOriginal = el.style.padding;
+            const anchoOriginal = el.style.width;
+            const maxAnchoOriginal = el.style.maxWidth;
+            el.style.padding = '20px';
+            el.style.width = '480px';
+            el.style.maxWidth = 'none';
+            try {
+                return await html2canvas(el, { backgroundColor: '#0B0F14', scale: 2, useCORS: true, windowWidth: 520 });
+            } finally {
+                el.style.padding = paddingOriginal;
+                el.style.width = anchoOriginal;
+                el.style.maxWidth = maxAnchoOriginal;
+            }
+        }
+
+        async function confirmarExportar(formato) {
+            const estadoEl = document.getElementById('exportar-estado');
+            estadoEl.textContent = 'Generando…';
+            try {
+                const canvas = await capturarElementoComoCanvas(EXPORTAR_ID_ELEMENTO);
+                if (formato === 'imagen') {
+                    await exportarComoImagen(canvas, EXPORTAR_NOMBRE_ARCHIVO);
+                } else {
+                    exportarComoPDF(canvas, EXPORTAR_NOMBRE_ARCHIVO);
+                }
+                cerrarMenuExportar();
+            } catch (err) {
+                estadoEl.textContent = 'No se pudo exportar: ' + err.message;
+            }
+        }
+
+        async function exportarComoImagen(canvas, nombreArchivo) {
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+            const archivo = new File([blob], nombreArchivo + '.png', { type: 'image/png' });
+
+            if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+                try {
+                    await navigator.share({ files: [archivo], title: 'Futsal Hub' });
+                    return;
+                } catch (e) { /* si cancela el share nativo, seguimos a la descarga */ }
+            }
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nombreArchivo + '.png';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportarComoPDF(canvas, nombreArchivo) {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+            const margenMM = 10;
+            const anchoUtilMM = 210 - margenMM * 2;
+            const altoUtilMM = 297 - margenMM * 2;
+
+            const escalaMMporPX = anchoUtilMM / canvas.width;
+            const altoNaturalMM = canvas.height * escalaMMporPX;
+
+            // Siempre entra en una sola página: si el contenido es más alto que la
+            // hoja, se achica todo proporcionalmente (ancho y alto) hasta que quepa.
+            let anchoFinalMM = anchoUtilMM;
+            let altoFinalMM = altoNaturalMM;
+            if (altoNaturalMM > altoUtilMM) {
+                const factor = altoUtilMM / altoNaturalMM;
+                altoFinalMM = altoUtilMM;
+                anchoFinalMM = anchoUtilMM * factor;
+            }
+
+            const offsetXmm = margenMM + (anchoUtilMM - anchoFinalMM) / 2;
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', offsetXmm, margenMM, anchoFinalMM, altoFinalMM);
+            pdf.save(nombreArchivo + '.pdf');
         }
 
         function iconoWhatsApp(tamano) {
@@ -5336,6 +5545,24 @@
             </div>
         </div>
     </div>
+
+    <!-- MODAL: ELEGIR FORMATO DE EXPORTACIÓN -->
+    <div id="modal-exportar" class="hidden fixed inset-0 z-[65] flex items-center justify-center px-6">
+        <div class="absolute inset-0 bg-black/80" onclick="cerrarMenuExportar()"></div>
+        <div class="relative bg-surface border border-borde rounded-3xl p-6 max-w-xs w-full text-center">
+            <p class="text-sm font-semibold text-texto mb-4">Exportar como…</p>
+            <div class="flex gap-2 mb-2">
+                <button onclick="confirmarExportar('imagen')"
+                    class="flex-1 bg-elevado rounded-xl py-3 text-xs font-semibold text-texto">🖼️ Imagen</button>
+                <button onclick="confirmarExportar('pdf')"
+                    class="flex-1 bg-elevado rounded-xl py-3 text-xs font-semibold text-texto">📄 PDF</button>
+            </div>
+            <button onclick="cerrarMenuExportar()"
+                class="w-full text-center text-[11px] font-semibold text-muted uppercase tracking-wide mt-2 py-1">Cancelar</button>
+            <p id="exportar-estado" class="text-center text-xs text-muted mt-2 min-h-[16px]"></p>
+        </div>
+    </div>
+
 </body>
 
 </html>
