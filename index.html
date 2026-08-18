@@ -109,6 +109,24 @@
         #banner-sponsor-fijo img.img-cargada {
             opacity: 1;
         }
+
+        @keyframes pulse-splash {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.08);
+                opacity: 0.85;
+            }
+        }
+
+        .animate-pulse-splash {
+            animation: pulse-splash 1s ease-in-out infinite;
+        }
     </style>
     <script defer src="https://cloud.umami.is/script.js"
         data-website-id="6e64ba6f-14db-4908-9251-0f9e83fbf2ce"></script>
@@ -117,6 +135,8 @@
 </head>
 
 <body class="bg-[#05070a] font-body text-texto">
+
+
 
     <div class="max-w-md mx-auto min-h-screen bg-cancha shadow-2xl shadow-black/50 relative">
 
@@ -323,6 +343,12 @@
                 class="absolute top-3 right-3 text-live text-lg leading-none">✕</button>
             <div id="admin-contenido"></div>
         </div>
+    </div>
+
+    <!-- SPLASH INICIAL (2 segundos, logo con animación) -->
+    <div id="splash-inicial" class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-cancha">
+        <img src="/img/futsalhub-logo.png" alt="Futsal Hub" class="w-24 h-24 rounded-2xl animate-pulse-splash" />
+        <p class="font-display text-xl tracking-wide mt-4">FUTSAL <span class="text-accent">HUB</span></p>
     </div>
 
     <script>
@@ -5904,6 +5930,18 @@
         const contModal = document.getElementById('modal-contenido');
         if (contVista) observadorImagenes.observe(contVista, { childList: true, subtree: true });
         if (contModal) observadorImagenes.observe(contModal, { childList: true, subtree: true });
+
+        const elementoSplash = document.getElementById('splash-inicial');
+        if (elementoSplash) {
+            elementoSplash.style.zIndex = '999999';
+            elementoSplash.style.position = 'fixed';
+        }
+        setTimeout(() => {
+            if (!elementoSplash) return;
+            elementoSplash.style.transition = 'opacity 0.3s ease';
+            elementoSplash.style.opacity = '0';
+            setTimeout(() => elementoSplash.remove(), 300);
+        }, 2500);
 
         cargarFavoritos();
         inicializarIdentidadProde();
