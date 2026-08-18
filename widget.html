@@ -208,7 +208,7 @@
             }
         }
 
-        function calcularForma(idEquipo) {
+                function calcularForma(idEquipo) {
             const idStr = String(idEquipo);
             return PARTIDOS
                 .filter((p) => (String(p.id_local) === idStr || String(p.id_visitante) === idStr) && normalizarEstado(p.estado) === 'finalizado')
@@ -226,7 +226,7 @@
                     let resultado = 'E';
                     if (propios > rivalGoles) resultado = 'G';
                     else if (propios < rivalGoles) resultado = 'P';
-                    return { resultado, rival, propios, rivalGoles, esLocal };
+                    return { resultado, rival, propios, rivalGoles, esLocal, temporada: p.temporada };
                 });
         }
 
@@ -370,29 +370,61 @@
             return `<p class="text-xs wf-elevado rounded-xl px-3 py-2 mb-3 flex items-center gap-2" style="color: var(--wf-texto);"><span>${icono}</span>${escaparHtml(texto)}</p>`;
         }
 
+        let CATEGORIA_WIDGET_PERFIL = null;
+
         function renderBuscadorPerfil() {
-            const cont = document.getElementById('vista-widget');
             const clubs = obtenerClubsUnicos();
+            const categorias = ordenarCategorias([...new Set(PARTIDOS.map((p) => p.categoria).filter(Boolean))]);
+            const cont = document.getElementById('vista-widget');
+
+            if (!CATEGORIA_WIDGET_PERFIL) {
+                cont.innerHTML = `
+          <p class="text-xs wf-muted mb-3">Elegí una categoría</p>
+          <div class="space-y-2">
+            ${categorias.map((c) => `<button onclick='elegirCategoriaWidgetPerfil(${JSON.stringify(c)})' class="w-full wf-surface border wf-borde rounded-xl py-3 text-sm font-semibold" style="color: var(--wf-texto);">${escaparHtml(c)}</button>`).join('')}
+          </div>
+          <p class="text-center text-[9px] wf-muted mt-4">Datos en vivo de <a href="https://futsalhub.com.ar" target="_blank" class="text-accent">Futsal Hub</a></p>
+        `;
+                return;
+            }
+
             cont.innerHTML = `
+        <button onclick="volverCategoriaWidgetPerfil()" class="text-[11px] text-accent font-semibold uppercase mb-3">← ${escaparHtml(CATEGORIA_WIDGET_PERFIL)}</button>
         <input id="buscador-widget" type="text" placeholder="Buscá tu equipo…" class="w-full wf-elevado border wf-borde rounded-xl px-3 py-2.5 text-sm placeholder:wf-muted mb-3" style="color: var(--wf-texto);"/>
         <div id="resultados-widget" class="space-y-2"></div>
-        <p class="text-center text-[9px] wf-muted mt-4">Más estadísticas en <a href="https://futsalrosario.vercel.app" target="_blank" class="text-accent">Futsal Hub</a></p>
+        <p class="text-center text-[9px] wf-muted mt-4">Datos en vivo de <a href="https://futsalhub.com.ar" target="_blank" class="text-accent">Futsal Hub</a></p>
       `;
+            const idsEnCategoria = [...new Set(
+                PARTIDOS.filter((p) => p.categoria === CATEGORIA_WIDGET_PERFIL)
+                    .flatMap((p) => [String(p.id_local), String(p.id_visitante)])
+            )];
+            const clubsDeLaCategoria = idsEnCategoria.map((id) => equipoInfo(id)).filter((e) => e.nombre !== 'Equipo desconocido');
             const input = document.getElementById('buscador-widget');
             const pintarResultados = (filtro) => {
-                const filtrados = filtro ? clubs.filter((c) => normalizarClub(c.nombre).includes(normalizarClub(filtro))) : [];
-                document.getElementById('resultados-widget').innerHTML = filtrados.slice(0, 6).map((c) => `
+                const base = filtro ? clubsDeLaCategoria.filter((c) => normalizarClub(c.nombre).includes(normalizarClub(filtro))) : clubsDeLaCategoria;
+                document.getElementById('resultados-widget').innerHTML = base.slice(0, 6).map((c) => `
           <button data-equipo-id="${c.id_equipo}" class="w-full flex items-center gap-3 wf-surface border wf-borde rounded-xl p-3 text-left">
             <img src="${c.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(c.nombre)}');" class="w-10 h-10 rounded-lg object-cover wf-elevado flex-shrink-0"/>
             <span class="font-display text-sm tracking-wide" style="color: var(--wf-texto);">${escaparHtml(c.nombre)}</span>
           </button>
         `).join('');
             };
+            pintarResultados('');
             input.addEventListener('input', (e) => pintarResultados(e.target.value));
             document.getElementById('resultados-widget').addEventListener('click', (e) => {
                 const btn = e.target.closest('[data-equipo-id]');
                 if (btn) renderPerfilEquipo(btn.dataset.equipoId);
             });
+        }
+
+        function elegirCategoriaWidgetPerfil(categoria) {
+            CATEGORIA_WIDGET_PERFIL = categoria;
+            renderBuscadorPerfil();
+        }
+
+        function volverCategoriaWidgetPerfil() {
+            CATEGORIA_WIDGET_PERFIL = null;
+            renderBuscadorPerfil();
         }
 
         let CATEGORIA_TABLA_WIDGET = null;
@@ -521,6 +553,7 @@
               <span class="truncate" style="color: var(--wf-texto);">${escaparHtml(f.rival.nombre)}</span>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
+              <span class="text-[9px] wf-muted font-mono">${f.temporada ? "'" + String(f.temporada).slice(-2) : ''}</span>
               <span class="font-mono font-semibold" style="color: var(--wf-texto);">${f.propios}-${f.rivalGoles}</span>
               <span class="w-5 h-5 flex items-center justify-center rounded-full font-bold text-[10px] ${f.resultado === 'G' ? 'bg-accent text-cancha' : f.resultado === 'E' ? 'bg-warning text-cancha' : 'bg-live text-white'}">${f.resultado}</span>
             </div>
