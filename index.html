@@ -1076,7 +1076,8 @@
             CAMPEONES_MANUAL = data.campeonesManual || [];
             AJUSTES_PUNTOS = data.ajustesPuntos || [];
             PRODE_DATOS = data.prode || [];
-            NOTICIAS_DATOS = ordenarNoticias(data.noticias || []);
+            NOTICIAS_DATOS = ordenarNoticias((data.noticias || []).filter((n) => normalizarBooleano(n.activo)));
+            APLAUSOS_NOTICIAS = data.aplausosNoticias || [];
             EQUIPOS = equipos;
             EQUIPOS_POR_ID = new Map(equipos.map((eq) => [String(eq.id_equipo), eq]));
             PARTIDOS = partidos;
@@ -1318,8 +1319,10 @@
         let CAMPEONES_TEMPORADA = {};
         let CAMPEONES_MANUAL = [];
         let NOTICIAS_DATOS = [];
+        let CARRUSEL_NOTICIA_IMAGENES = {};
+        let CARRUSEL_NOTICIA_INDICE = {};
         let NOTICIAS_PAGINA = 0;
-        const NOTICIAS_POR_PAGINA = 8;
+        const NOTICIAS_POR_PAGINA = 5;
         let PRODE_DATOS = [];
         let AJUSTES_PUNTOS = [];
         let DESEMPATES_TEMPORADA = {};
@@ -1496,8 +1499,11 @@
       <${tag} ${atributos} class="flex gap-3 bg-surface border ${destacada ? 'border-accent' : 'border-borde'} rounded-2xl p-3 mb-2 text-left w-full">
         <img src="${n.imagen_url || ''}" onerror="this.style.display='none'" class="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover bg-elevado flex-shrink-0"/>
         <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-2">
-            <p class="text-sm font-bold text-texto leading-snug line-clamp-2">${escaparHtml(n.titulo || '')}</p>
+                    <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              ${n.categoria ? `<span class="inline-block text-[9px] font-bold uppercase tracking-wide text-accent bg-accent/10 rounded-full px-2 py-0.5 mb-1">${escaparHtml(n.categoria)}</span>` : ''}
+              <p class="text-sm font-bold text-texto leading-snug line-clamp-2">${escaparHtml(n.titulo || '')}</p>
+            </div>
             <span class="text-muted flex-shrink-0 text-xs mt-0.5">${esExterna ? '↗' : '📖'}</span>
           </div>
           ${n.caption ? `<p class="text-xs text-muted mt-1 line-clamp-3">${escaparHtml(n.caption)}</p>` : ''}
@@ -1537,13 +1543,181 @@
             ULTIMO_VOLVER_CUSTOM = null;
             PALMARES_VOLVER_MEDALLERO = false;
             document.getElementById('btn-volver-modal').classList.add('hidden');
+
+            const imagenesExtra = (n.imagenes_extra || '').split(',').map((s) => s.trim()).filter(Boolean);
+            const todasLasImagenes = [n.imagen_url, ...imagenesExtra].filter(Boolean);
+            CARRUSEL_NOTICIA_IMAGENES[idx] = todasLasImagenes;
+            CARRUSEL_NOTICIA_INDICE[idx] = 0;
+
+            const aplaudida = NOTICIAS_APLAUDIDAS_LOCAL.has(n.titulo);
+            const registroAplausos = APLAUSOS_NOTICIAS.find((a) => a.titulo === n.titulo);
+            const cantidadAplausos = registroAplausos ? registroAplausos.cantidad : 0;
+
+            const imagenPrincipalHtml = `<div id="wrap-carrusel-${idx}" class="relative mb-3" ontouchstart="iniciarSwipeCarrusel(event)" ontouchend="finalizarSwipeCarrusel(event, ${idx})"></div>`;
+
             document.getElementById('modal-contenido').innerHTML = `
-    <img src="${n.imagen_url || ''}" onerror="this.style.display='none'" class="w-full aspect-video rounded-2xl object-cover bg-elevado mb-3"/>
-    <p class="text-[10px] text-muted uppercase tracking-wide mb-1">${formatearFechaVisual(n.fecha)}</p>
-    <h2 class="font-display text-lg tracking-wide mb-3">${escaparHtml(n.titulo || '')}</h2>
-    <div class="text-sm text-texto leading-relaxed whitespace-pre-line">${escaparHtml(n.contenido || '')}</div>
+    <div id="noticia-captura-${idx}">
+      ${imagenPrincipalHtml}
+      <div class="flex items-center gap-2 mb-1">
+        ${n.categoria ? `<span class="text-[9px] font-bold uppercase tracking-wide text-accent bg-accent/10 rounded-full px-2 py-0.5">${escaparHtml(n.categoria)}</span>` : ''}
+        <p class="text-[10px] text-muted uppercase tracking-wide">${formatearFechaVisual(n.fecha)}</p>
+      </div>
+            <h2 class="font-display text-lg tracking-wide mb-1">${escaparHtml(n.titulo || '')}</h2>
+    </div>
+    <div class="flex items-center justify-between mb-3" data-html2canvas-ignore="true">
+      <button onclick='toggleAplausoNoticia(${idx})' id="btn-aplauso-${idx}" class="flex items-center gap-1.5 text-xs ${aplaudida ? 'text-accent' : 'text-muted'}">
+        <span id="icono-aplauso-${idx}">${aplaudida ? '👏' : '🤍'}</span>
+        <span id="contador-aplauso-${idx}">${cantidadAplausos}</span>
+      </button>
+      <button onclick='compartirNoticiaWhatsApp(${idx})' class="text-muted flex items-center gap-1.5 text-xs" title="Compartir">
+        ${iconoWhatsApp(16)} Compartir
+      </button>
+    </div>
+        <div class="text-sm text-texto leading-relaxed" style="white-space: pre-line;">${escaparHtml(String(n.contenido || '').replace(/\r\n/g, '\n'))}</div>
+    ${n.autor ? `<p class="text-[11px] text-muted italic mt-4 text-right">Por ${escaparHtml(n.autor)}</p>` : ''}
   `;
             document.getElementById('modal-equipo').classList.remove('hidden');
+            renderCarruselNoticia(idx);
+        }
+
+        function toggleAplausoNoticia(idx) {
+            const n = NOTICIAS_DATOS[idx];
+            if (!n) return;
+            const yaAplaudida = NOTICIAS_APLAUDIDAS_LOCAL.has(n.titulo);
+            const icono = document.getElementById(`icono-aplauso-${idx}`);
+            const contador = document.getElementById(`contador-aplauso-${idx}`);
+            const btn = document.getElementById(`btn-aplauso-${idx}`);
+
+            // Optimista: cambia en pantalla al instante, sin esperar al servidor.
+            if (yaAplaudida) {
+                NOTICIAS_APLAUDIDAS_LOCAL.delete(n.titulo);
+                icono.textContent = '🤍';
+                btn.classList.remove('text-accent');
+                btn.classList.add('text-muted');
+                contador.textContent = Math.max(0, Number(contador.textContent) - 1);
+            } else {
+                NOTICIAS_APLAUDIDAS_LOCAL.add(n.titulo);
+                icono.textContent = '👏';
+                btn.classList.remove('text-muted');
+                btn.classList.add('text-accent');
+                contador.textContent = Number(contador.textContent) + 1;
+            }
+            guardarNoticiasAplaudidasLocal();
+
+            fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ accion: 'toggleAplauso', datos: { titulo: n.titulo, dispositivo_id: DISPOSITIVO_ID } }),
+            }).catch(() => { /* si falla, el cambio local ya se aplicó igual — se resincroniza en el próximo cargarDatos() */ });
+        }
+
+        async function compartirNoticiaWhatsApp(idx) {
+            const n = NOTICIAS_DATOS[idx];
+            if (!n) return;
+
+            const LIMITE_CONTENIDO = 260;
+            const contenidoCorto = (n.contenido || '').length > LIMITE_CONTENIDO
+                ? n.contenido.slice(0, LIMITE_CONTENIDO).trim() + '…'
+                : (n.contenido || '');
+
+            const idTemp = `noticia-story-temp`;
+            let cont = document.getElementById(idTemp);
+            if (cont) cont.remove();
+            cont = document.createElement('div');
+            cont.id = idTemp;
+            cont.style.position = 'fixed';
+            cont.style.left = '-9999px';
+            cont.style.top = '0';
+            cont.style.width = '405px';
+            cont.style.height = '720px';
+            cont.className = 'bg-cancha flex flex-col overflow-hidden relative';
+            cont.innerHTML = `
+    <img src="${n.imagen_url || ''}" onerror="this.style.display='none'" style="width:100%; height:55%; object-fit:cover;"/>
+    <div style="position:absolute; top:0; left:0; right:0; height:55%; background:linear-gradient(to bottom, transparent 60%, #0B0F14 100%);"></div>
+    <div class="flex-1 p-5 flex flex-col">
+      ${n.categoria ? `<span class="inline-block text-[10px] font-bold uppercase tracking-wide text-accent bg-accent/10 rounded-full px-2 py-1 mb-2" style="width:fit-content;">${escaparHtml(n.categoria)}</span>` : ''}
+      <h2 class="font-display text-xl tracking-wide mb-2" style="color:#F2F5F8;">${escaparHtml(n.titulo || '')}</h2>
+      ${n.caption ? `<p class="text-sm mb-2" style="color:#8894A3;">${escaparHtml(n.caption)}</p>` : ''}
+      <p class="text-xs leading-relaxed" style="color:#F2F5F8; white-space: pre-line;">${escaparHtml(contenidoCorto)}</p>
+      <div class="flex-1"></div>
+      <p class="text-center text-xs font-semibold" style="color:#35D07F;">futsalrosario.vercel.app</p>
+    </div>
+  `;
+            document.body.appendChild(cont);
+
+            const texto = `📰 ${n.titulo}\n\n${n.caption || ''}\n\nLeé la nota completa en Futsal Hub 👉 ${window.location.href}`;
+            await compartirWhatsAppConImagen(texto, idTemp, `noticia_${idx}`);
+            cont.remove();
+        }
+
+        let APLAUSOS_NOTICIAS = [];
+        let NOTICIAS_APLAUDIDAS_LOCAL = new Set();
+
+        function cargarNoticiasAplaudidasLocal() {
+            try {
+                const raw = localStorage.getItem('noticias_aplaudidas');
+                NOTICIAS_APLAUDIDAS_LOCAL = new Set(raw ? JSON.parse(raw) : []);
+            } catch (e) { NOTICIAS_APLAUDIDAS_LOCAL = new Set(); }
+        }
+        function guardarNoticiasAplaudidasLocal() {
+            try { localStorage.setItem('noticias_aplaudidas', JSON.stringify([...NOTICIAS_APLAUDIDAS_LOCAL])); } catch (e) { }
+        }
+
+                function renderCarruselNoticia(idx) {
+            const imagenes = CARRUSEL_NOTICIA_IMAGENES[idx] || [];
+            const actual = CARRUSEL_NOTICIA_INDICE[idx] || 0;
+            const wrap = document.getElementById(`wrap-carrusel-${idx}`);
+            if (!wrap) return;
+
+            if (imagenes.length <= 1) {
+                wrap.innerHTML = `<img src="${imagenes[0] || ''}" onerror="this.style.display='none'" class="w-full aspect-video rounded-2xl object-cover bg-elevado block"/>`;
+                return;
+            }
+
+            wrap.innerHTML = `
+    <div class="relative w-full aspect-video rounded-2xl overflow-hidden bg-elevado">
+      <img src="${imagenes[actual]}" onerror="this.style.display='none'" class="w-full h-full object-cover block" style="touch-action: pan-y;"/>
+      <button onclick="moverCarruselNoticia(${idx}, -1)" data-html2canvas-ignore="true" class="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 text-white">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button onclick="moverCarruselNoticia(${idx}, 1)" data-html2canvas-ignore="true" class="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 text-white">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <div data-html2canvas-ignore="true" class="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+        ${imagenes.map((_, i) => `<span class="w-1.5 h-1.5 rounded-full ${i === actual ? 'bg-white' : 'bg-white/40'}"></span>`).join('')}
+      </div>
+    </div>
+  `;
+        }
+
+        function moverCarruselNoticia(idx, direccion) {
+            const imagenes = CARRUSEL_NOTICIA_IMAGENES[idx] || [];
+            if (!imagenes.length) return;
+            let nuevo = (CARRUSEL_NOTICIA_INDICE[idx] || 0) + direccion;
+            if (nuevo < 0) nuevo = imagenes.length - 1;
+            if (nuevo >= imagenes.length) nuevo = 0;
+            CARRUSEL_NOTICIA_INDICE[idx] = nuevo;
+            renderCarruselNoticia(idx);
+        }
+
+                let SWIPE_X_INICIO = null;
+        let SWIPE_Y_INICIO = null;
+        function iniciarSwipeCarrusel(e) {
+            SWIPE_X_INICIO = e.touches[0].clientX;
+            SWIPE_Y_INICIO = e.touches[0].clientY;
+        }
+        function finalizarSwipeCarrusel(e, idx) {
+            if (SWIPE_X_INICIO == null) return;
+            const deltaX = e.changedTouches[0].clientX - SWIPE_X_INICIO;
+            const deltaY = e.changedTouches[0].clientY - SWIPE_Y_INICIO;
+            // Solo si el movimiento fue predominantemente horizontal — si fue
+            // más vertical, dejamos que el navegador scrollee normal (no era
+            // intención de cambiar de foto).
+            if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                moverCarruselNoticia(idx, deltaX > 0 ? -1 : 1);
+            }
+            SWIPE_X_INICIO = null;
+            SWIPE_Y_INICIO = null;
         }
 
         /* ============================================================
@@ -2667,6 +2841,7 @@
     <div class="space-y-2">${partidos.map(filaLegCruce).join('')}</div>
   `;
             document.getElementById('modal-equipo').classList.remove('hidden');
+            renderCarruselNoticia(idx);
         }
 
         function formatGolConPenal(goles, penales) {
@@ -5944,6 +6119,7 @@
         }, 2500);
 
         cargarFavoritos();
+        cargarNoticiasAplaudidasLocal();
         inicializarIdentidadProde();
         actualizarBadgeProde();
         registrarServiceWorker();
