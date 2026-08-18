@@ -92,6 +92,11 @@
             scrollbar-width: none;
         }
 
+        .exportando-captura,
+        .exportando-captura * {
+            line-height: 2 !important;
+        }
+
         #vista-contenido img,
         #toast-sponsor img,
         #banner-sponsor-fijo img {
@@ -346,7 +351,7 @@
 
         const ASCENSOS_MANUALES = {
             'Primera B|2023': ['Parquefield'],
-            'Primera B|2024': ['Sirio'],
+            'Primera A|2024': ['Sirio'],
         };
 
         function tieneDescenso(categoria) {
@@ -1338,9 +1343,9 @@
             document.getElementById('contador-vivos').classList.add('hidden');
 
             document.getElementById('tabs-categorias').classList.toggle('hidden', VISTA_ACTIVA === 'equipos' || VISTA_ACTIVA === 'comunidad');
-    const categoriaParaSelector = VISTA_ACTIVA === 'tabla' ? CATEGORIA_TABLA : CATEGORIA_ACTIVA;
-    generarTabsCategorias();
-    generarSelectorTemporada(obtenerTemporadasDisponibles(categoriaParaSelector));
+            const categoriaParaSelector = VISTA_ACTIVA === 'tabla' ? CATEGORIA_TABLA : CATEGORIA_ACTIVA;
+            generarTabsCategorias();
+            generarSelectorTemporada(obtenerTemporadasDisponibles(categoriaParaSelector));
 
             if (VISTA_ACTIVA === 'partidos') renderPartidos();
             else if (VISTA_ACTIVA === 'tabla') renderTabla();
@@ -1723,21 +1728,63 @@
 
         function renderPartidosBusqueda(cabecera) {
             const q = PARTIDOS_BUSQUEDA.trim().toLowerCase();
-            const partidosTemporada = filtrarPorTemporada(PARTIDOS).filter((p) => normalizarFase(p.fase) === 'Regular');
-            const coincidencias = partidosTemporada
-                .filter((p) => {
-                    const local = equipoInfo(p.id_local).nombre.toLowerCase();
-                    const visitante = equipoInfo(p.id_visitante).nombre.toLowerCase();
-                    return local.includes(q) || visitante.includes(q);
-                })
-                .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || Number(a.fecha_nro) - Number(b.fecha_nro));
+            let partidosBase = filtrarPorTemporada(PARTIDOS).filter((p) => normalizarFase(p.fase) === 'Regular');
+            if (CATEGORIA_ACTIVA !== 'Todas') {
+                partidosBase = partidosBase.filter((p) => p.categoria === CATEGORIA_ACTIVA);
+            }
 
-            actualizarContadorVivos(coincidencias.filter((p) => normalizarEstado(p.estado) === 'vivo').length);
+            const coincidencias = partidosBase.filter((p) => {
+                const local = equipoInfo(p.id_local).nombre.toLowerCase();
+                const visitante = equipoInfo(p.id_visitante).nombre.toLowerCase();
+                return local.includes(q) || visitante.includes(q);
+            });
 
+            const incluirCategoria = CATEGORIA_ACTIVA === 'Todas';
+            const subChips = `
+    <div class="flex gap-2 mb-3">
+      <button onclick="cambiarFiltroEstadoPartidos('porjugar')" class="text-[11px] font-semibold px-2.5 py-1 rounded-full border ${PARTIDOS_FILTRO_ESTADO === 'porjugar' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Por jugar</button>
+      <button onclick="cambiarFiltroEstadoPartidos('finalizados')" class="text-[11px] font-semibold px-2.5 py-1 rounded-full border ${PARTIDOS_FILTRO_ESTADO === 'finalizados' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Finalizados</button>
+      <button onclick="cambiarFiltroEstadoPartidos('todos')" class="text-[11px] font-semibold px-2.5 py-1 rounded-full border ${PARTIDOS_FILTRO_ESTADO === 'todos' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Todos</button>
+    </div>
+  `;
+
+            let listaHtml = '';
+            let cantidadEnVivo = 0;
+
+            if (PARTIDOS_FILTRO_ESTADO === 'todos') {
+                const pendientes = coincidencias
+                    .filter((p) => normalizarEstado(p.estado) !== 'finalizado')
+                    .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')));
+                const finalizados = coincidencias
+                    .filter((p) => normalizarEstado(p.estado) === 'finalizado')
+                    .sort((a, b) => Number(b.fecha_nro) - Number(a.fecha_nro));
+                cantidadEnVivo = pendientes.filter((p) => normalizarEstado(p.estado) === 'vivo').length;
+
+                if (pendientes.length) {
+                    listaHtml += `<p class="text-[10px] text-muted uppercase tracking-wide px-1">Próximos</p>${incluirCategoria ? renderPaginaAgrupadaPorCategoria(pendientes) : renderGruposPartidos(pendientes)}`;
+                }
+                if (finalizados.length) {
+                    listaHtml += `<p class="text-[10px] text-muted uppercase tracking-wide px-1 mt-3">Resultados</p>${incluirCategoria ? renderPaginaAgrupadaPorCategoria(finalizados) : renderGruposPartidos(finalizados)}`;
+                }
+                if (!pendientes.length && !finalizados.length) {
+                    listaHtml = `<p class="text-center text-muted text-sm py-16">No se encontraron partidos para "${escaparHtml(PARTIDOS_BUSQUEDA)}".</p>`;
+                }
+            } else {
+                const esFinalizados = PARTIDOS_FILTRO_ESTADO === 'finalizados';
+                const lista = coincidencias
+                    .filter((p) => (normalizarEstado(p.estado) === 'finalizado') === esFinalizados)
+                    .sort((a, b) => esFinalizados
+                        ? Number(b.fecha_nro) - Number(a.fecha_nro)
+                        : String(a.fecha || '').localeCompare(String(b.fecha || '')));
+                cantidadEnVivo = lista.filter((p) => normalizarEstado(p.estado) === 'vivo').length;
+                listaHtml = lista.length
+                    ? (incluirCategoria ? renderPaginaAgrupadaPorCategoria(lista) : renderGruposPartidos(lista))
+                    : `<p class="text-center text-muted text-sm py-16">No se encontraron partidos ${esFinalizados ? 'finalizados' : 'por jugar'} para "${escaparHtml(PARTIDOS_BUSQUEDA)}".</p>`;
+            }
+
+            actualizarContadorVivos(cantidadEnVivo);
             const contenedor = document.getElementById('vista-contenido');
-            contenedor.innerHTML = cabecera + (coincidencias.length
-                ? renderPaginaAgrupadaPorCategoria(coincidencias)
-                : `<p class="text-center text-muted text-sm py-16">No se encontraron partidos para "${escaparHtml(PARTIDOS_BUSQUEDA)}".</p>`);
+            contenedor.innerHTML = cabecera + subChips + listaHtml;
             configurarBuscadorPartidos();
         }
 
@@ -3698,6 +3745,8 @@
 
             const tip = tipOnboarding('equipos', 'Buscá tu equipo favorito para ver sus estadísticas y alineaciones.');
             const medallero = bloqueMedallero();
+            const botonRachas = bloqueBotonRachas();
+            const botonH2H = bloqueBotonH2HBuscador();
 
             const paginacion = totalPaginas > 1 ? `
     <div class="flex items-center justify-between mt-3 mb-2">
@@ -3713,6 +3762,8 @@
 
             contenedor.innerHTML = `
     ${medallero}
+    ${botonRachas}
+    ${botonH2H}
     <input id="buscador-equipos" type="text" value="${escaparHtml(FILTRO_EQUIPOS)}" placeholder="Buscar equipo…" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2.5 text-sm text-texto placeholder:text-muted mb-1"/>
     ${tip}
     ${clubs.map(tarjetaEquipo).join('') || `<p class="text-center text-muted text-sm py-16">No se encontraron equipos.</p>`}
@@ -3801,6 +3852,297 @@
                 });
         }
 
+        const RACHA_MINIMO = 4;
+        const CATEGORIAS_RACHAS = ['Primera A', 'Femenino A', 'Primera B', 'Reserva A'];
+        const ICONOS_RACHA = {
+            gano: '🔥',
+            perdio: '❄️',
+            nopierde: '🛡️',
+            nogana: '😶',
+            rompioSinGanar: '⚡',
+            rompioSinPerder: '💔',
+        };
+
+        function calcularRachaEquipo(idEquipo) {
+            const idStr = String(idEquipo);
+            const resultados = PARTIDOS
+                .filter((p) => (String(p.id_local) === idStr || String(p.id_visitante) === idStr) && normalizarEstado(p.estado) === 'finalizado')
+                .sort((a, b) => {
+                    const porTemporada = String(b.temporada || '').localeCompare(String(a.temporada || ''), undefined, { numeric: true });
+                    if (porTemporada !== 0) return porTemporada;
+                    return Number(b.fecha_nro) - Number(a.fecha_nro);
+                })
+                .map((p) => {
+                    const esLocal = String(p.id_local) === idStr;
+                    const propios = esLocal ? Number(p.goles_local) || 0 : Number(p.goles_visitante) || 0;
+                    const rival = esLocal ? Number(p.goles_visitante) || 0 : Number(p.goles_local) || 0;
+                    if (propios > rival) return 'G';
+                    if (propios < rival) return 'P';
+                    return 'E';
+                }); // más reciente primero
+
+            if (!resultados.length) return null;
+
+            function contarMientras(cond) {
+                let n = 0;
+                for (const r of resultados) { if (cond(r)) n++; else break; }
+                return n;
+            }
+
+            const winStreak = contarMientras((r) => r === 'G');
+            const lossStreak = contarMientras((r) => r === 'P');
+            const unbeatenStreak = contarMientras((r) => r !== 'P');
+            const winlessStreak = contarMientras((r) => r !== 'G');
+
+            let rompioSinGanar = null;
+            let rompioSinPerder = null;
+            if (resultados[0] === 'G') {
+                let n = 0;
+                for (let i = 1; i < resultados.length; i++) { if (resultados[i] !== 'G') n++; else break; }
+                if (n > 0) rompioSinGanar = n;
+            }
+            if (resultados[0] === 'P') {
+                let n = 0;
+                for (let i = 1; i < resultados.length; i++) { if (resultados[i] !== 'P') n++; else break; }
+                if (n > 0) rompioSinPerder = n;
+            }
+
+            return { winStreak, lossStreak, unbeatenStreak, winlessStreak, rompioSinGanar, rompioSinPerder };
+        }
+
+        function textoRacha(item) {
+            const nombre = escaparHtml(item.equipo.nombre);
+            switch (item.tipo) {
+                case 'gano': return `${nombre} ganó ${item.valor} seguidos`;
+                case 'perdio': return `${nombre} perdió ${item.valor} seguidos`;
+                case 'nopierde': return `${nombre} no pierde hace ${item.valor} partidos`;
+                case 'nogana': return `${nombre} no gana hace ${item.valor} partidos`;
+                case 'rompioSinGanar': return `${nombre} ganó después de ${item.valor} partidos sin victorias`;
+                case 'rompioSinPerder': return `${nombre} perdió después de ${item.valor} partidos sin derrotas`;
+                default: return nombre;
+            }
+        }
+
+        function calcularRachasParaMostrar(r) {
+            const items = [];
+            if (r.rompioSinGanar != null && r.rompioSinGanar >= RACHA_MINIMO) items.push({ tipo: 'rompioSinGanar', valor: r.rompioSinGanar });
+            if (r.rompioSinPerder != null && r.rompioSinPerder >= RACHA_MINIMO) items.push({ tipo: 'rompioSinPerder', valor: r.rompioSinPerder });
+            if (r.winStreak >= RACHA_MINIMO) items.push({ tipo: 'gano', valor: r.winStreak });
+            if (r.lossStreak >= RACHA_MINIMO) items.push({ tipo: 'perdio', valor: r.lossStreak });
+            if (r.unbeatenStreak >= RACHA_MINIMO && r.unbeatenStreak > r.winStreak) items.push({ tipo: 'nopierde', valor: r.unbeatenStreak });
+            if (r.winlessStreak >= RACHA_MINIMO && r.winlessStreak > r.lossStreak) items.push({ tipo: 'nogana', valor: r.winlessStreak });
+            return items;
+        }
+
+        function calcularRachasCategoria(categoria) {
+            const temporadas = obtenerTemporadasDisponibles(categoria);
+            const temporada = temporadas[0];
+            if (!temporada) return [];
+
+            const idsEquipos = [...new Set(
+                PARTIDOS.filter((p) => p.categoria === categoria && String(p.temporada) === String(temporada))
+                    .flatMap((p) => [String(p.id_local), String(p.id_visitante)])
+            )];
+
+            const resultado = [];
+            idsEquipos.forEach((id) => {
+                const r = calcularRachaEquipo(id);
+                if (!r) return;
+                const equipo = equipoInfo(id);
+                calcularRachasParaMostrar(r).forEach((item) => resultado.push({ equipo, ...item }));
+            });
+
+            return resultado;
+        }
+
+        function bloqueBotonRachas() {
+            return `
+    <button onclick="abrirModalRachas()" class="w-full flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mb-3">
+      <span class="text-xs font-semibold text-texto">🔥 Rachas</span>
+      <span class="text-[11px] text-muted">Ver rachas →</span>
+    </button>
+  `;
+        }
+
+        function abrirModalRachas() {
+            ULTIMO_VOLVER_CUSTOM = null;
+            PALMARES_VOLVER_MEDALLERO = false;
+            document.getElementById('btn-volver-modal').classList.add('hidden');
+
+            const bloques = CATEGORIAS_RACHAS.map((cat, idx) => {
+                const items = calcularRachasCategoria(cat);
+                const idCategoria = `racha-cat-${idx}`;
+                const cuerpo = items.length
+                    ? `<div class="space-y-2">${items.map((it) => `
+          <div class="flex items-center gap-2.5 bg-elevado rounded-xl px-3 py-2.5">
+            <img src="${it.equipo.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(it.equipo.nombre)}');" class="w-6 h-6 rounded-full object-cover bg-elevado flex-shrink-0"/>
+            <span class="text-lg flex-shrink-0">${ICONOS_RACHA[it.tipo]}</span>
+            <span class="text-xs text-texto">${textoRacha(it)}</span>
+          </div>
+        `).join('')}</div>`
+                    : `<p class="text-xs text-muted text-center py-4">Momentáneamente no hay rachas.</p>`;
+                return `
+      <div class="flex items-center justify-between px-1 mt-4 mb-2">
+        <h3 class="text-xs font-semibold text-texto uppercase tracking-wide">${escaparHtml(cat)}</h3>
+        ${items.length ? `<button onclick='compartirRachaCategoria(${idx}, ${JSON.stringify(cat)})' class="text-muted flex-shrink-0" data-html2canvas-ignore="true" title="Compartir">${iconoWhatsApp(15)}</button>` : ''}
+      </div>
+      <div id="${idCategoria}">${cuerpo}</div>
+    `;
+            }).join('');
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-1">🔥 Rachas</h2>
+    <p class="text-[10px] text-muted mb-2">Con los resultados de la temporada más reciente de cada categoría.</p>
+    ${bloques}
+  `;
+            document.getElementById('modal-equipo').classList.remove('hidden');
+        }
+
+        function compartirRachaCategoria(idx, categoria) {
+            const items = calcularRachasCategoria(categoria);
+            const lineas = items.map((it) => `${ICONOS_RACHA[it.tipo]} ${textoRacha(it)}`).join('\n');
+            const texto = `🔥 Rachas — ${categoria}\n\n${lineas}\n\nMirá todo en FutsalHub 👉 ${window.location.href}`;
+            compartirWhatsAppConImagen(texto, `racha-cat-${idx}`, `rachas_${categoria.replace(/\s+/g, '_')}`);
+        }
+
+        function bloqueRachaEquipo(idEquipo) {
+            const r = calcularRachaEquipo(idEquipo);
+            if (!r) return '';
+            const items = calcularRachasParaMostrar(r);
+            if (!items.length) return '';
+            return `
+    <div class="space-y-1.5 mb-3">
+      ${items.map((it) => `
+        <p class="text-xs text-texto bg-elevado rounded-xl px-3 py-2 flex items-center gap-2">
+          <span>${ICONOS_RACHA[it.tipo]}</span>${escaparHtml(textoRacha({ equipo: equipoInfo(idEquipo), ...it }).replace(equipoInfo(idEquipo).nombre + ' ', ''))}
+        </p>
+      `).join('')}
+    </div>
+  `;
+        }
+
+        function bloqueBotonH2HBuscador() {
+            return `
+    <button onclick="abrirBuscadorH2H()" class="w-full flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mb-3">
+      <span class="text-xs font-semibold text-texto">⚔️ Historial de Enfrentamientos</span>
+      <span class="text-[11px] text-muted">Comparar equipos →</span>
+    </button>
+  `;
+        }
+
+        let H2HB_FAMILIA = null;
+        let H2HB_EQUIPO_A = null;
+        let H2HB_EQUIPO_B = null;
+
+        function abrirBuscadorH2H() {
+            ULTIMO_VOLVER_CUSTOM = null;
+            PALMARES_VOLVER_MEDALLERO = false;
+            document.getElementById('btn-volver-modal').classList.add('hidden');
+            H2HB_FAMILIA = null;
+            H2HB_EQUIPO_A = null;
+            H2HB_EQUIPO_B = null;
+            renderBuscadorH2H();
+            document.getElementById('modal-equipo').classList.remove('hidden');
+        }
+
+        function obtenerFamiliasDisponibles() {
+            const familias = new Set();
+            obtenerClubsUnicos().forEach((e) => familias.add(familiaCategoria(e.categoria)));
+            // Fijo a propósito en Primera y Femenino — Reserva queda afuera del
+            // buscador de Historial de Enfrentamientos, sin importar qué datos
+            // haya cargados en el futuro.
+            const orden = ['primera', 'femenino'];
+            return orden.filter((f) => familias.has(f));
+        }
+
+        function etiquetaFamilia(familia) {
+            const mapa = { primera: 'Primera', reserva: 'Reserva', femenino: 'Femenino' };
+            return mapa[familia] || familia;
+        }
+
+        function renderBuscadorH2H() {
+            const familias = obtenerFamiliasDisponibles();
+
+            if (!H2HB_FAMILIA) {
+                document.getElementById('modal-contenido').innerHTML = `
+      <h2 class="font-display text-lg tracking-wide mb-1">⚔️ Historial de Enfrentamientos</h2>
+      <p class="text-xs text-muted mb-4">Elegí una categoría para comparar dos clubes.</p>
+      <div class="space-y-2">
+        ${familias.map((f) => `<button onclick="elegirFamiliaH2H('${f}')" class="w-full bg-elevado rounded-xl py-3 text-sm font-semibold text-texto">${etiquetaFamilia(f)}</button>`).join('')}
+      </div>
+    `;
+                return;
+            }
+
+            const clubsDeLaFamilia = obtenerClubsUnicos().filter((e) => familiaCategoria(e.categoria) === H2HB_FAMILIA);
+            const opciones = (excluirClave) => clubsDeLaFamilia
+                .filter((e) => claveClub(e) !== excluirClave)
+                .map((e) => `<option value="${e.id_equipo}">${escaparHtml(e.nombre)}</option>`)
+                .join('');
+
+            const claveA = H2HB_EQUIPO_A ? claveClub(equipoInfo(H2HB_EQUIPO_A)) : null;
+            const claveB = H2HB_EQUIPO_B ? claveClub(equipoInfo(H2HB_EQUIPO_B)) : null;
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <button onclick="volverFamiliaH2H()" class="text-[11px] text-accent font-semibold uppercase mb-3">← ${etiquetaFamilia(H2HB_FAMILIA)}</button>
+    <h2 class="font-display text-lg tracking-wide mb-4">⚔️ Elegí los dos equipos</h2>
+    <label class="text-[11px] uppercase text-muted font-semibold">Equipo 1</label>
+        <select id="sel-h2hb-a" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto" style="max-height: 40vh;">
+      <option value="">Elegí un equipo</option>
+      ${opciones(claveB)}
+    </select>
+    <label class="text-[11px] uppercase text-muted font-semibold">Equipo 2</label>
+    <select id="sel-h2hb-b" class="w-full mt-1.5 mb-4 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto" style="max-height: 40vh;">
+      <option value="">Elegí un equipo</option>
+      ${opciones(claveA)}
+    </select>
+    <button id="btn-comparar-h2hb" onclick="confirmarComparacionH2H()" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5" disabled style="opacity:0.5;">Comparar</button>
+  `;
+
+            const selA = document.getElementById('sel-h2hb-a');
+            const selB = document.getElementById('sel-h2hb-b');
+            if (H2HB_EQUIPO_A) selA.value = H2HB_EQUIPO_A;
+            if (H2HB_EQUIPO_B) selB.value = H2HB_EQUIPO_B;
+
+            const actualizarBoton = () => {
+                const btn = document.getElementById('btn-comparar-h2hb');
+                const listo = selA.value && selB.value && selA.value !== selB.value;
+                btn.disabled = !listo;
+                btn.style.opacity = listo ? '1' : '0.5';
+            };
+            selA.addEventListener('change', actualizarBoton);
+            selB.addEventListener('change', actualizarBoton);
+            actualizarBoton();
+        }
+
+        function elegirFamiliaH2H(familia) {
+            H2HB_FAMILIA = familia;
+            renderBuscadorH2H();
+        }
+
+        function volverFamiliaH2H() {
+            H2HB_FAMILIA = null;
+            H2HB_EQUIPO_A = null;
+            H2HB_EQUIPO_B = null;
+            renderBuscadorH2H();
+        }
+
+        function confirmarComparacionH2H() {
+            const idA = document.getElementById('sel-h2hb-a').value;
+            const idB = document.getElementById('sel-h2hb-b').value;
+            if (!idA || !idB || idA === idB) return;
+            H2HB_EQUIPO_A = idA;
+            H2HB_EQUIPO_B = idB;
+
+            abrirModalHistorial(idA, idB);
+
+            // Se setea DESPUÉS de abrirModalHistorial, porque esa función resetea
+            // ULTIMO_VOLVER_CUSTOM a null apenas arranca (para no arrastrar estado
+            // de otros flujos) — si lo seteáramos antes, se pisaría solo.
+            ULTIMO_VOLVER_CUSTOM = () => { renderBuscadorH2H(); document.getElementById('btn-volver-modal').classList.remove('hidden'); };
+            document.getElementById('btn-volver-modal').classList.remove('hidden');
+        }
+
         function etiquetaTemporadaForma(forma) {
             const temporadas = [...new Set(forma.map((f) => f.temporada).filter((t) => t != null && t !== ''))];
             if (!temporadas.length) return '';
@@ -3829,6 +4171,7 @@
       </div>
     </div>
 
+        ${bloqueRachaEquipo(idEquipo)}
     <div class="flex items-center justify-between mb-1">
       <h3 class="text-[11px] uppercase tracking-wide text-muted font-semibold">Forma · últimos 5${etiquetaTemporadaForma(forma)}</h3>
       ${forma.length ? `<div class="flex items-center gap-2 flex-shrink-0" data-html2canvas-ignore="true">
@@ -5069,7 +5412,7 @@
                 const archivo = new File([blob], (nombreArchivo || 'futsalhub') + '.png', { type: 'image/png' });
 
                 if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
-                    await navigator.share({ files: [archivo], text: texto });
+                    await navigator.share({ files: [archivo], text: texto, title: 'Futsal Hub' });
                     return;
                 }
             } catch (e) { /* si falla la imagen o el share, caemos al texto solo */ }
@@ -5125,25 +5468,35 @@
             modal.style.display = '';
         }
 
+        async function esperarImagenesCargadas(el) {
+            const imgs = Array.from(el.querySelectorAll('img'));
+            await Promise.all(imgs.map((img) => {
+                if (img.complete) return Promise.resolve();
+                return new Promise((resolve) => {
+                    img.addEventListener('load', resolve, { once: true });
+                    img.addEventListener('error', resolve, { once: true });
+                });
+            }));
+        }
+
         async function capturarElementoComoCanvas(idElemento) {
             const el = document.getElementById(idElemento);
             if (!el) throw new Error('No se encontró el contenido a exportar.');
 
-            // Padding + ancho temporales solo para la captura — dan más aire real
-            // a las filas de texto largo (como el historial H2H), en vez de que el
-            // padding les robe espacio y corte los nombres. Se revierte apenas termina.
+            // Padding temporal solo para la captura, sin afectar cómo se ve en
+            // pantalla normalmente (se saca apenas termina).
             const paddingOriginal = el.style.padding;
-            const anchoOriginal = el.style.width;
-            const maxAnchoOriginal = el.style.maxWidth;
             el.style.padding = '20px';
-            el.style.width = '480px';
-            el.style.maxWidth = 'none';
+            el.classList.add('exportando-captura');
             try {
-                return await html2canvas(el, { backgroundColor: '#0B0F14', scale: 2, useCORS: true, windowWidth: 520 });
+                await esperarImagenesCargadas(el);
+                if (document.fonts && document.fonts.ready) {
+                    await document.fonts.ready;
+                }
+                return await html2canvas(el, { backgroundColor: '#0B0F14', scale: 2, useCORS: true });
             } finally {
                 el.style.padding = paddingOriginal;
-                el.style.width = anchoOriginal;
-                el.style.maxWidth = maxAnchoOriginal;
+                el.classList.remove('exportando-captura');
             }
         }
 
