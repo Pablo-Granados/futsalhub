@@ -356,6 +356,8 @@
      *  CONFIGURACIÓN 
      * ============================================================ */
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyNynwx8VfnEkSYHQZAeuz2r0CuhenLMtRdnt0iAixk5ic26rPhy1L3m5Sxm4m0GHXv/exec';
+        const SUPABASE_URL = 'https://fhtlsdyitlqwuhztcmwz.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZodGxzZHlpdGxxd3VoenRjbXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxOTI5MDYsImV4cCI6MjEwMjc2ODkwNn0.cNKZmN9HfjpcEBSmgcyVya3wJyjZvy_ol7U0pAV5fFc';
         const FORMSPREE_ENDPOINT = 'https://formspree.io/f/mdaqpevw'; // 
         const CACHE_KEY = 'arf_futsal_datos_v1';
 
@@ -1152,9 +1154,18 @@
             try {
                 const res = await fetch(APPS_SCRIPT_URL + '?api=1&_=' + Date.now(), { cache: 'no-store' });
                 if (!res.ok) throw new Error('http_' + res.status);
-
                 const json = await leerRespuestaConProgreso(res);
                 if (!json.ok) throw new Error(json.error || 'error_backend');
+
+                // Equipos y partidos vienen de Supabase (mucho más rápido) — el
+                // resto de los datos (sponsors, noticias, prode, etc.) sigue
+                // viniendo de Apps Script como siempre, sin tocar nada de eso.
+                const [equiposSupabase, partidosSupabase] = await Promise.all([
+                    traerDeSupabase('equipos', '*', 'id_equipo'),
+                    traerDeSupabase('partidos', '*', 'id'),
+                ]);
+                json.data.equipos = mapearEquiposDesdeSupabase(equiposSupabase);
+                json.data.partidos = mapearPartidosDesdeSupabase(partidosSupabase);
 
                 guardarDuracionCarga(Date.now() - inicioCarga);
                 aplicarDatos(json.data, true);
@@ -1186,6 +1197,80 @@
                     document.getElementById('estado-error').classList.remove('hidden');
                 }
             }
+        }
+
+        async function probarCargaSupabase() {
+            const inicio = Date.now();
+            const [equiposSb, partidosSb] = await Promise.all([
+                traerDeSupabase('equipos', '*', 'id_equipo'),
+                traerDeSupabase('partidos', '*', 'id'),
+            ]);
+
+            const tiempoTotal = Date.now() - inicio;
+            console.log('⏱️ Supabase tardó:', tiempoTotal, 'ms');
+            console.log('Equipos:', equiposSb.length, 'Partidos:', partidosSb.length);
+            return { equiposSb, partidosSb, tiempoTotal };
+        }
+
+        async function traerDeSupabase(tabla, columnas, columnaOrden) {
+            const TAMANO_PAGINA = 1000;
+            let desde = 0;
+            let todasLasFilas = [];
+            const orden = columnaOrden || 'id';
+
+            while (true) {
+                const url = `${SUPABASE_URL}/rest/v1/${tabla}?select=${columnas || '*'}&order=${orden}.asc`;
+                const res = await fetch(url, {
+                    headers: {
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
+                        Range: `${desde}-${desde + TAMANO_PAGINA - 1}`,
+                    },
+                });
+                if (!res.ok && res.status !== 206) throw new Error('supabase_' + res.status);
+
+                const pagina = await res.json();
+                todasLasFilas = todasLasFilas.concat(pagina);
+
+                if (pagina.length < TAMANO_PAGINA) break; // ya trajimos todo
+                desde += TAMANO_PAGINA;
+            }
+
+            return todasLasFilas;
+        }
+
+        function mapearEquiposDesdeSupabase(lista) {
+            return lista.map((e) => ({
+                id_equipo: e.id_equipo,
+                nombre: e.nombre,
+                categoria: e.categoria,
+                temporada: e.temporada,
+                id_club: e.id_club,
+                url_escudo: e.url_escudo,
+                descripcion: e.descripcion,
+                color_principal: e.color_principal,
+                color_secundario: e.color_secundario,
+                url_camiseta: e.url_camiseta,
+            }));
+        }
+
+        function mapearPartidosDesdeSupabase(lista) {
+            return lista.map((p) => ({
+                fecha: p.fecha,
+                fecha_nro: p.fecha_nro,
+                etiqueta_fecha: p.etiqueta_fecha === 'Sin programar' ? '' : p.etiqueta_fecha,
+                categoria: p.categoria,
+                id_local: p.id_local,
+                goles_local: p.goles_local,
+                id_visitante: p.id_visitante,
+                goles_visitante: p.goles_visitante,
+                estado: p.estado,
+                temporada: p.temporada,
+                fase: p.fase,
+                penales_local: p.penales_local,
+                penales_visitante: p.penales_visitante,
+                destacado: p.destacado,
+            }));
         }
 
         function precargarSponsorTemprano() {
@@ -1663,7 +1748,7 @@
             try { localStorage.setItem('noticias_aplaudidas', JSON.stringify([...NOTICIAS_APLAUDIDAS_LOCAL])); } catch (e) { }
         }
 
-                function renderCarruselNoticia(idx) {
+        function renderCarruselNoticia(idx) {
             const imagenes = CARRUSEL_NOTICIA_IMAGENES[idx] || [];
             const actual = CARRUSEL_NOTICIA_INDICE[idx] || 0;
             const wrap = document.getElementById(`wrap-carrusel-${idx}`);
@@ -1700,7 +1785,7 @@
             renderCarruselNoticia(idx);
         }
 
-                let SWIPE_X_INICIO = null;
+        let SWIPE_X_INICIO = null;
         let SWIPE_Y_INICIO = null;
         function iniciarSwipeCarrusel(e) {
             SWIPE_X_INICIO = e.touches[0].clientX;
@@ -4057,7 +4142,7 @@
         const CATEGORIAS_RACHAS = ['Primera A', 'Femenino A', 'Primera B', 'Reserva A'];
         const ICONOS_RACHA = {
             gano: '🔥',
-            perdio: '❄️',
+            perdio: '📉',
             nopierde: '🛡️',
             nogana: '😶',
             rompioSinGanar: '⚡',
