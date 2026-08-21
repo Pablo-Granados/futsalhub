@@ -1154,20 +1154,26 @@
             }
 
             try {
-                const res = await fetch(APPS_SCRIPT_URL + '?api=1&_=' + Date.now(), { cache: 'no-store' });
-                if (!res.ok) throw new Error('http_' + res.status);
-                const json = await leerRespuestaConProgreso(res);
-                if (!json.ok) throw new Error(json.error || 'error_backend');
-
                 // Equipos y partidos vienen de Supabase (mucho más rápido) — el
                 // resto de los datos (sponsors, noticias, prode, etc.) sigue
                 // viniendo de Apps Script como siempre, sin tocar nada de eso.
-                const [equiposSupabase, partidosSupabase, prodeSupabase] = await Promise.all([
+                // Los dos viajes de red arrancan en paralelo, no uno detrás del otro.
+                const fetchAppsScript = fetch(APPS_SCRIPT_URL + '?api=1&_=' + Date.now(), { cache: 'no-store' })
+                    .then(async (res) => {
+                        if (!res.ok) throw new Error('http_' + res.status);
+                        const json = await leerRespuestaConProgreso(res);
+                        if (!json.ok) throw new Error(json.error || 'error_backend');
+                        return json;
+                    });
+                const fetchSupabase = Promise.all([
                     traerDeSupabase('equipos', '*', 'id_equipo'),
                     traerDeSupabase('partidos', '*', 'id'),
                     traerProdeDesdeSupabase(),
                 ]);
+
+                const [json, [equiposSupabase, partidosSupabase, prodeSupabase]] = await Promise.all([fetchAppsScript, fetchSupabase]);
                 json.data.prode = prodeSupabase;
+
                 // Guardamos las horas que vinieron de Apps Script antes de pisar con Supabase
                 // (Supabase todavía no tiene columna hora/fecha_hora)
                 const mapaHoras = new Map();
@@ -3276,7 +3282,8 @@
     <p class="text-xs text-muted mb-4">Iniciá sesión para predecir y ver el ranking.</p>
     <input id="input-login-email" type="email" placeholder="tu@mail.com" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
     <input id="input-login-password" type="password" placeholder="Contraseña" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
-    <button id="btn-login-prode" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Entrar</button>
+        <button id="btn-login-prode" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Entrar</button>
+    <button onclick="pedirRecuperarPassword('input-login-email', 'error-login-prode')" class="w-full text-center text-[11px] font-semibold text-accent uppercase tracking-wide mt-3 py-1">¿Olvidaste tu contraseña?</button>
     <p id="error-login-prode" class="text-center text-xs text-live mt-2 min-h-[16px]"></p>
   `;
 
@@ -3307,6 +3314,55 @@
             CLUB_USUARIO = null;
             renderLoginProde();
         }
+
+                async function pedirRecuperarPassword(inputEmailId, estadoElId) {
+            const email = document.getElementById(inputEmailId).value.trim();
+            const estadoEl = document.getElementById(estadoElId);
+            if (!email) { estadoEl.textContent = 'Ingresá tu mail primero.'; return; }
+
+            estadoEl.textContent = 'Enviando…';
+            estadoEl.className = 'text-center text-xs mt-2 text-muted';
+            const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.origin + window.location.pathname,
+            });
+            if (error) {
+                estadoEl.textContent = 'No pude enviar el mail: ' + error.message;
+                estadoEl.className = 'text-center text-xs mt-2 text-live';
+                return;
+            }
+            estadoEl.textContent = '✓ Te mandamos un mail con el link para cambiarla.';
+            estadoEl.className = 'text-center text-xs mt-2 text-accent';
+        }
+
+        function renderCambiarPasswordProde() {
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-1">Elegí tu nueva contraseña</h2>
+    <input id="input-nueva-password" type="password" placeholder="Nueva contraseña" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
+    <button id="btn-guardar-nueva-password" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Guardar contraseña</button>
+    <p id="error-nueva-password" class="text-center text-xs text-live mt-2 min-h-[16px]"></p>
+  `;
+            document.getElementById('modal-equipo').classList.remove('hidden');
+
+            document.getElementById('btn-guardar-nueva-password').onclick = async () => {
+                const nueva = document.getElementById('input-nueva-password').value;
+                const estadoEl = document.getElementById('error-nueva-password');
+                if (!nueva || nueva.length < 6) { estadoEl.textContent = 'Mínimo 6 caracteres.'; return; }
+
+                estadoEl.textContent = 'Guardando…';
+                const { error } = await supabaseClient.auth.updateUser({ password: nueva });
+                if (error) { estadoEl.textContent = 'Error: ' + error.message; return; }
+
+                                estadoEl.textContent = '✓ Contraseña actualizada.';
+                estadoEl.className = 'text-center text-xs mt-2 text-accent';
+                setTimeout(() => { abrirProde(); }, 1000);
+            };
+        }
+
+        supabaseClient.auth.onAuthStateChange((evento) => {
+            if (evento === 'PASSWORD_RECOVERY') {
+                renderCambiarPasswordProde();
+            }
+        });
 
         function actualizarBadgeProde() {
             try {
@@ -5214,7 +5270,8 @@
     <h2 class="font-display text-lg tracking-wide mb-3">Panel de administración</h2>
     <input id="admin-login-email" type="email" placeholder="tu@mail.com" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
     <input id="admin-login-password" type="password" placeholder="Contraseña" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
-    <button onclick="validarPinAdmin()" class="w-full mt-1 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Ingresar</button>
+        <button onclick="validarPinAdmin()" class="w-full mt-1 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Ingresar</button>
+    <button onclick="pedirRecuperarPassword('admin-login-email', 'admin-pin-estado')" class="w-full text-center text-[11px] font-semibold text-accent uppercase tracking-wide mt-3 py-1">¿Olvidaste tu contraseña?</button>
     <p id="admin-pin-estado" class="text-center text-xs text-live mt-2 min-h-[16px]"></p>
   `;
         }
