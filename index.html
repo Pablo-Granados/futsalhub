@@ -18,6 +18,18 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Futsal Hub">
+    <!-- Open Graph — cómo se ve el link al compartirlo en WhatsApp/redes -->
+    <meta property="og:title" content="FutsalHub — Fixture en vivo del futsal de Rosario">
+    <meta property="og:description"
+        content="Resultados en vivo, tabla de posiciones, Prode y más de la Liga de Futsal de Rosario.">
+    <meta property="og:image" content="https://futsalrosario.vercel.app/img/futsalhub-logo.png">
+    <meta property="og:url" content="https://futsalrosario.vercel.app">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="FutsalHub — Fixture en vivo del futsal de Rosario">
+    <meta name="twitter:description"
+        content="Resultados en vivo, tabla de posiciones, Prode y más de la Liga de Futsal de Rosario.">
+    <meta name="twitter:image" content="https://futsalrosario.vercel.app/img/futsalhub-logo.png">
     <link rel="stylesheet" href="css/output.css">
     <style>
         .lineas-cancha {
@@ -3919,6 +3931,14 @@
                 return;
             }
 
+            // Supabase no devuelve error si el mail ya existe (protección anti-enumeración
+            // de cuentas) — la única pista es que "identities" viene vacío.
+            if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+                estadoEl.innerHTML = 'Ese mail ya tiene cuenta. <button onclick="renderLoginProde()" class="underline font-semibold">Iniciar sesión</button>';
+                estadoEl.className = 'text-center text-xs mt-2 text-live';
+                return;
+            }
+
             await supabaseClient.from('prode_perfiles').insert([{
                 user_id: data.user.id,
                 nombre_apellido: nombre,
@@ -6341,12 +6361,73 @@
       <h2 class="font-display text-lg tracking-wide">Panel de administración</h2>
       <button onclick="cerrarSesionAdmin()" class="text-[10px] text-muted uppercase font-semibold">Salir</button>
     </div>
-    <div class="space-y-2">
+        <div class="space-y-2">
       <button onclick="renderAdminPanelCategorias()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">📋 Cargar resultado</button>
       <button onclick="renderAdminEditarResultado()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">✏️ Editar resultado</button>
       <button onclick="renderAdminAjustarPuntos()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">⚖️ Ajustar puntos</button>
+      <button onclick="renderAdminResumenFecha()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">📢 Resumen de fecha</button>
     </div>
   `;
+        }
+
+        let ADMIN_RESUMEN_CATEGORIA = null;
+        let ADMIN_RESUMEN_JORNADA = null;
+
+        function renderAdminResumenFecha() {
+            const partidos = filtrarPorTemporada(PARTIDOS);
+            const categorias = ordenarCategorias([...new Set(partidos.map((p) => p.categoria))]);
+
+            if (!ADMIN_RESUMEN_CATEGORIA || !categorias.includes(ADMIN_RESUMEN_CATEGORIA)) {
+                ADMIN_RESUMEN_CATEGORIA = categorias[0] || null;
+            }
+
+            document.getElementById('admin-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="renderAdminMenu()" class="text-muted text-sm">←</button>
+      <h2 class="font-display text-base tracking-wide">Resumen de fecha</h2>
+      <span></span>
+    </div>
+    <label class="text-[11px] uppercase text-muted font-semibold">Categoría</label>
+    <select id="admin-resumen-sel-categoria" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"></select>
+    <label class="text-[11px] uppercase text-muted font-semibold">Fecha</label>
+    <select id="admin-resumen-sel-jornada" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"></select>
+    <button id="btn-generar-resumen" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Generar y compartir</button>
+    <p id="admin-resumen-estado" class="text-center text-xs mt-2 min-h-[16px] text-muted"></p>
+  `;
+
+            const selCat = document.getElementById('admin-resumen-sel-categoria');
+            selCat.innerHTML = categorias.map((c) => `<option value="${c}" ${c === ADMIN_RESUMEN_CATEGORIA ? 'selected' : ''}>${c}</option>`).join('');
+            selCat.onchange = () => {
+                ADMIN_RESUMEN_CATEGORIA = selCat.value;
+                ADMIN_RESUMEN_JORNADA = null;
+                actualizarJornadasResumen();
+            };
+
+            actualizarJornadasResumen();
+
+            document.getElementById('btn-generar-resumen').onclick = async () => {
+                const estadoEl = document.getElementById('admin-resumen-estado');
+                estadoEl.textContent = 'Generando…';
+                try {
+                    await compartirResumenFecha(ADMIN_RESUMEN_CATEGORIA, ADMIN_RESUMEN_JORNADA);
+                    estadoEl.textContent = '✓ Listo.';
+                } catch (err) {
+                    estadoEl.textContent = 'Error: ' + err.message;
+                }
+            };
+        }
+
+        function actualizarJornadasResumen() {
+            const partidos = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === ADMIN_RESUMEN_CATEGORIA);
+            const jornadas = [...new Set(partidos.map((p) => Number(p.fecha_nro)))].sort((a, b) => b - a); // más reciente primero
+
+            if (ADMIN_RESUMEN_JORNADA === null || !jornadas.includes(ADMIN_RESUMEN_JORNADA)) {
+                ADMIN_RESUMEN_JORNADA = jornadas.length ? jornadas[0] : null;
+            }
+
+            const sel = document.getElementById('admin-resumen-sel-jornada');
+            sel.innerHTML = jornadas.map((j) => `<option value="${j}" ${j === ADMIN_RESUMEN_JORNADA ? 'selected' : ''}>Fecha ${j}</option>`).join('');
+            sel.onchange = () => { ADMIN_RESUMEN_JORNADA = Number(sel.value); };
         }
 
         /* ---------- Editar resultado ya cargado ---------- */
@@ -7043,6 +7124,21 @@
             }));
         }
 
+        function agregarWatermarkSponsor(el) {
+            if (!SPONSORS || !SPONSORS.length) return null;
+            const sponsor = SPONSORS[Math.floor(Math.random() * SPONSORS.length)];
+            const watermark = document.createElement('div');
+            watermark.id = 'watermark-captura-sponsor';
+            watermark.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0 2px;margin-top:12px;border-top:1px solid rgba(255,255,255,0.08);';
+            watermark.innerHTML = `
+      <span style="font-size:10px;color:#8894A3;">Con el apoyo de</span>
+      ${sponsor.imagen_url ? `<img src="${sponsor.imagen_url}" crossorigin="anonymous" style="height:18px;border-radius:4px;"/>` : ''}
+      <span style="font-size:11px;color:#F2F5F8;font-weight:600;">${escaparHtml(sponsor.nombre || '')}</span>
+    `;
+            el.appendChild(watermark);
+            return watermark;
+        }
+
         async function capturarElementoComoCanvas(idElemento) {
             const el = document.getElementById(idElemento);
             if (!el) throw new Error('No se encontró el contenido a exportar.');
@@ -7052,6 +7148,7 @@
             const paddingOriginal = el.style.padding;
             el.style.padding = '20px';
             el.classList.add('exportando-captura');
+            const watermark = agregarWatermarkSponsor(el);
             try {
                 await esperarImagenesCargadas(el);
                 if (document.fonts && document.fonts.ready) {
@@ -7061,6 +7158,7 @@
             } finally {
                 el.style.padding = paddingOriginal;
                 el.classList.remove('exportando-captura');
+                if (watermark) watermark.remove();
             }
         }
 
@@ -7123,6 +7221,111 @@
             const offsetXmm = margenMM + (anchoUtilMM - anchoFinalMM) / 2;
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', offsetXmm, margenMM, anchoFinalMM, altoFinalMM);
             pdf.save(nombreArchivo + '.pdf');
+        }
+
+        function generarResumenFecha(categoria, fechaNro) {
+            const partidosFecha = filtrarPorTemporada(PARTIDOS).filter(
+                (p) => p.categoria === categoria && Number(p.fecha_nro) === fechaNro &&
+                    normalizarFase(p.fase) === 'Regular' && normalizarEstado(p.estado) === 'finalizado'
+            );
+            if (!partidosFecha.length) return null;
+
+            const tabla = calcularTabla(categoria, 'Regular', TEMPORADA_ACTIVA);
+            const posicionPorId = new Map();
+            tabla.forEach((f, i) => posicionPorId.set(String(f.id), i + 1));
+
+            let sorpresa = null;
+            let mayorDiferencia = 0;
+
+            partidosFecha.forEach((p) => {
+                const gl = Number(p.goles_local) || 0;
+                const gv = Number(p.goles_visitante) || 0;
+                if (gl === gv) return;
+                const ganadorId = gl > gv ? p.id_local : p.id_visitante;
+                const perdedorId = gl > gv ? p.id_visitante : p.id_local;
+                const posGanador = posicionPorId.get(String(ganadorId));
+                const posPerdedor = posicionPorId.get(String(perdedorId));
+                if (posGanador == null || posPerdedor == null) return;
+                const diferencia = posGanador - posPerdedor;
+                if (diferencia > mayorDiferencia) {
+                    mayorDiferencia = diferencia;
+                    sorpresa = { ganador: equipoInfo(ganadorId), perdedor: equipoInfo(perdedorId), posGanador, posPerdedor };
+                }
+            });
+
+            return { categoria, fechaNro, partidosFecha, tabla, sorpresa };
+        }
+
+        function prepararResumenFechaExportable(datos) {
+            let cont = document.getElementById('resumen-fecha-temp');
+            if (cont) cont.remove();
+            cont = document.createElement('div');
+            cont.id = 'resumen-fecha-temp';
+            cont.style.position = 'fixed';
+            cont.style.left = '-9999px';
+            cont.style.top = '0';
+            cont.style.width = '400px';
+            cont.className = 'bg-cancha p-6';
+
+            const filasPartidos = datos.partidosFecha.map((p) => {
+                const local = equipoInfo(p.id_local);
+                const visitante = equipoInfo(p.id_visitante);
+                return `
+      <div class="flex items-center justify-between bg-elevado rounded-xl px-3 py-2 mb-1.5 text-sm">
+        <div class="flex items-center gap-1.5 min-w-0 flex-1">
+          <img src="${local.url_escudo || ''}" crossorigin="anonymous" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(local.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-cancha flex-shrink-0"/>
+          <span class="truncate">${escaparHtml(local.nombre)}</span>
+        </div>
+        <span class="font-mono font-bold px-2 flex-shrink-0">${p.goles_local}-${p.goles_visitante}</span>
+        <div class="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
+          <span class="truncate text-right">${escaparHtml(visitante.nombre)}</span>
+          <img src="${visitante.url_escudo || ''}" crossorigin="anonymous" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(visitante.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-cancha flex-shrink-0"/>
+        </div>
+      </div>
+    `;
+            }).join('');
+
+            const bloqueSorpresa = datos.sorpresa ? `
+    <div class="bg-live/10 border border-live/30 rounded-xl p-3 mb-3 text-center">
+      <p class="text-xs font-bold text-live mb-2">🚨 Sorpresa de la fecha</p>
+      <div class="flex items-center justify-center gap-2">
+        <img src="${datos.sorpresa.ganador.url_escudo || ''}" crossorigin="anonymous" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(datos.sorpresa.ganador.nombre)}');" class="w-8 h-8 rounded-full object-cover bg-cancha flex-shrink-0"/>
+        <p class="text-xs text-texto">${escaparHtml(datos.sorpresa.ganador.nombre)} (${datos.sorpresa.posGanador}°) le ganó a ${escaparHtml(datos.sorpresa.perdedor.nombre)} (${datos.sorpresa.posPerdedor}°)</p>
+        <img src="${datos.sorpresa.perdedor.url_escudo || ''}" crossorigin="anonymous" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(datos.sorpresa.perdedor.nombre)}');" class="w-8 h-8 rounded-full object-cover bg-cancha flex-shrink-0"/>
+      </div>
+    </div>
+  ` : '';
+
+            const puntero = datos.tabla[0];
+
+            cont.innerHTML = `
+        <div class="text-center mb-4">
+      <p class="font-display text-2xl font-bold tracking-wide text-texto">FUTSAL <span class="text-accent">HUB</span></p>
+      <p class="text-xs text-muted uppercase tracking-wide mt-1">${escaparHtml(datos.categoria)} — Fecha ${datos.fechaNro}</p>
+    </div>
+    ${filasPartidos}
+    ${bloqueSorpresa}
+        ${puntero ? `
+      <div class="flex items-center justify-center gap-2 mt-2">
+        <img src="${puntero.equipo.url_escudo || ''}" crossorigin="anonymous" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(puntero.equipo.nombre)}');" class="w-6 h-6 rounded-full object-cover bg-cancha flex-shrink-0"/>
+        <p class="text-[10px] text-muted">🥇 Puntero: ${escaparHtml(puntero.equipo.nombre)} — ${puntero.pts} pts</p>
+      </div>
+    ` : ''}
+  `;
+            document.body.appendChild(cont);
+        }
+
+        async function compartirResumenFecha(categoria, fechaNro) {
+            const datos = generarResumenFecha(categoria, fechaNro);
+            if (!datos) {
+                alert('No hay resultados finalizados en esa fecha todavía.');
+                return;
+            }
+            prepararResumenFechaExportable(datos);
+            const texto = `📊 ${categoria} — Fecha ${fechaNro} ya tiene resultados. Mirá todo en FutsalHub 👉 ${window.location.href}`;
+            await compartirWhatsAppConImagen(texto, 'resumen-fecha-temp', 'resumen_fecha_' + fechaNro);
+            const cont = document.getElementById('resumen-fecha-temp');
+            if (cont) cont.remove();
         }
 
         function iconoWhatsApp(tamano) {
