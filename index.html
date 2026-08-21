@@ -127,6 +127,17 @@
         .animate-pulse-splash {
             animation: pulse-splash 1s ease-in-out infinite;
         }
+
+        /* iOS Safari hace zoom automático al enfocar inputs con texto menor a
+           16px — forzamos ese mínimo solo en mobile, sin tocar el resto del diseño. */
+        @media (max-width: 767px) {
+
+            input,
+            select,
+            textarea {
+                font-size: 16px !important;
+            }
+        }
     </style>
     <script defer src="https://cloud.umami.is/script.js"
         data-website-id="6e64ba6f-14db-4908-9251-0f9e83fbf2ce"></script>
@@ -1166,6 +1177,9 @@
                 'modal-cambio-posicion',
             ];
 
+            let scrollYGuardado = 0;
+            let bloqueado = false;
+
             function hayModalAbierto() {
                 return idsModales.some((id) => {
                     const el = document.getElementById(id);
@@ -1174,7 +1188,22 @@
             }
 
             function actualizarBloqueoScroll() {
-                document.body.classList.toggle('overflow-hidden', hayModalAbierto());
+                const debeBloquear = hayModalAbierto();
+                if (debeBloquear && !bloqueado) {
+                    scrollYGuardado = window.scrollY;
+                    document.body.style.position = 'fixed';
+                    document.body.style.top = '-' + scrollYGuardado + 'px';
+                    document.body.style.left = '0';
+                    document.body.style.right = '0';
+                    bloqueado = true;
+                } else if (!debeBloquear && bloqueado) {
+                    document.body.style.position = '';
+                    document.body.style.top = '';
+                    document.body.style.left = '';
+                    document.body.style.right = '';
+                    window.scrollTo(0, scrollYGuardado);
+                    bloqueado = false;
+                }
             }
 
             const observer = new MutationObserver(actualizarBloqueoScroll);
