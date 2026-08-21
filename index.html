@@ -174,6 +174,14 @@
                             <path d="M2 13h3M19 13h3M12 8v4M4 6l2 2M20 6l-2 2" />
                         </svg>
                     </button>
+                    <button id="btn-cuenta" title="Mi cuenta" onclick="abrirCuenta()"
+                        class="w-8 h-8 flex items-center justify-center rounded-full bg-elevado text-muted active:opacity-60 flex-shrink-0">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -278,6 +286,17 @@
         </div>
     </div>
 
+    <!-- MODAL DE CAMBIO DE POSICIÓN DEL CLUB HINCHA -->
+    <div id="modal-cambio-posicion" class="hidden fixed inset-0 z-[62] flex items-center justify-center px-6">
+        <div class="absolute inset-0 bg-black/80"></div>
+        <div class="relative bg-surface border border-borde rounded-3xl p-6 max-w-xs w-full text-center">
+            <span class="text-3xl">📊</span>
+            <div id="cambio-posicion-contenido" class="mt-3 mb-5"></div>
+            <button onclick="cerrarModalCambioPosicion()"
+                class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Entendido</button>
+        </div>
+    </div>
+
     <!-- MODAL DE INVITACIÓN AL PRODE (una sola vez) -->
     <div id="modal-invitacion-prode" class="hidden fixed inset-0 z-[62] flex items-center justify-center px-6">
         <div class="absolute inset-0 bg-black/80"></div>
@@ -292,6 +311,8 @@
                 class="w-full text-muted text-xs font-semibold uppercase tracking-wide py-1">Ahora no</button>
         </div>
     </div>
+
+
 
 
     <!-- BANNER FIJO DE SPONSOR (arriba de la barra de navegación, rota solo) -->
@@ -367,6 +388,8 @@
 
         const CATEGORIAS_CON_ASCENSO = ['Primera B'];
         const CATEGORIAS_CON_DESCENSO = ['Primera A', 'Femenino A'];
+        const CATEGORIAS_CON_PLAYOFF = ['Primera A', 'Femenino A', 'Reserva A'];
+        const CANTIDAD_PLAYOFF = 8;
 
         const CATEGORIA_PRODE = 'Primera A';
         const HORA_CORTE_PRODE = 18; // 24hs antes en la práctica, aproximado a "mismo día antes de las 18hs"
@@ -1085,6 +1108,7 @@
             EQUIPOS = equipos;
             EQUIPOS_POR_ID = new Map(equipos.map((eq) => [String(eq.id_equipo), eq]));
             PARTIDOS = partidos;
+            ELO_CACHE = {}; // los ratings dependen de los partidos — se recalculan con datos frescos
 
             JUGADORES_POR_EQUIPO = new Map();
             (jugadores || []).forEach((j) => {
@@ -1134,6 +1158,33 @@
                 renderVistaActual();
             });
         }
+
+        (function gestionarScrollDeFondo() {
+            const idsModales = [
+                'modal-equipo', 'modal-feedback', 'modal-admin', 'modal-invitacion-prode',
+                'modal-confirmar-desfav', 'modal-sponsor-grande', 'modal-exportar', 'modal-tip',
+                'modal-cambio-posicion',
+            ];
+
+            function hayModalAbierto() {
+                return idsModales.some((id) => {
+                    const el = document.getElementById(id);
+                    return el && !el.classList.contains('hidden');
+                });
+            }
+
+            function actualizarBloqueoScroll() {
+                document.body.classList.toggle('overflow-hidden', hayModalAbierto());
+            }
+
+            const observer = new MutationObserver(actualizarBloqueoScroll);
+            idsModales.forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) observer.observe(el, { attributes: true, attributeFilter: ['class'] });
+            });
+
+            actualizarBloqueoScroll();
+        })();
 
         async function cargarDatos() {
             const inicioCarga = Date.now();
@@ -1406,6 +1457,88 @@
             return JSON.parse(textoCompleto);
         }
 
+
+        function claveClubHincha() {
+            if (!CLUB_USUARIO) return null;
+            const equipoRef = filtrarPorTemporada(EQUIPOS).find((e) => e.nombre === CLUB_USUARIO);
+            return equipoRef ? claveClub(equipoRef) : null;
+        }
+
+        function equiposDelClubHinchaConDatos() {
+            const clave = claveClubHincha();
+            if (!clave) return [];
+            const equipos = filtrarPorTemporada(EQUIPOS).filter((e) => claveClub(e) === clave);
+            const resultado = [];
+            equipos.forEach((equipo) => {
+                const tabla = calcularTabla(equipo.categoria, 'Regular', TEMPORADA_ACTIVA);
+                const idx = tabla.findIndex((f) => String(f.id) === String(equipo.id_equipo));
+                if (idx === -1) return;
+                resultado.push({ equipo, categoria: equipo.categoria, fila: tabla[idx], posicion: idx + 1, totalEquipos: tabla.length, tabla });
+            });
+            return resultado;
+        }
+
+        function obtenerSnapshotClubHincha() {
+            try {
+                const raw = localStorage.getItem('club_hincha_snapshot');
+                return raw ? JSON.parse(raw) : {};
+            } catch (e) { return {}; }
+        }
+
+        function guardarSnapshotClubHincha(snapshot) {
+            try { localStorage.setItem('club_hincha_snapshot', JSON.stringify(snapshot)); } catch (e) { }
+        }
+
+        function verificarCambioPosicionClubHinchaSiCorresponde() {
+            if (SPONSOR_MODAL_BLOQUEADO) { setTimeout(verificarCambioPosicionClubHinchaSiCorresponde, 3000); return; }
+            verificarCambioPosicionClubHincha();
+        }
+
+        function verificarCambioPosicionClubHincha() {
+            if (!TEMPORADA_ACTIVA) return;
+            const datos = equiposDelClubHinchaConDatos();
+            if (!datos.length) return;
+
+            const snapshotAnterior = obtenerSnapshotClubHincha();
+            const snapshotNuevo = { ...snapshotAnterior };
+            const cambios = [];
+
+            datos.forEach(({ equipo, categoria, fila, posicion, totalEquipos, tabla }) => {
+                const clave = categoria + '|' + TEMPORADA_ACTIVA;
+                const posicionAnterior = snapshotAnterior[clave];
+                snapshotNuevo[clave] = posicion;
+                if (posicionAnterior != null && posicionAnterior !== posicion) {
+                    cambios.push({ equipo, categoria, fila, posicion, totalEquipos, tabla, posicionAnterior });
+                }
+            });
+
+            guardarSnapshotClubHincha(snapshotNuevo);
+            if (cambios.length) mostrarModalCambioPosicion(cambios);
+        }
+
+        function mostrarModalCambioPosicion(cambios) {
+            const bloques = cambios.map(({ equipo, categoria, fila, posicion, totalEquipos, tabla, posicionAnterior }) => {
+                const subio = posicion < posicionAnterior;
+                const flecha = subio ? '📈 Subiste' : '📉 Bajaste';
+                const alertas = calcularAlertasZona(categoria, fila, posicion, totalEquipos, tabla);
+                const lineasAlertas = alertas.map((a) => `<p class="text-[11px] text-muted mt-1">${escaparHtml(a.texto)}</p>`).join('');
+                return `
+      <div class="mb-3 last:mb-0">
+        <p class="text-sm font-semibold text-texto">${escaparHtml(equipo.nombre)} — ${escaparHtml(categoria)}</p>
+        <p class="text-xs text-accent font-semibold mt-0.5">${flecha} al puesto ${posicion}° (antes ${posicionAnterior}°)</p>
+        ${lineasAlertas}
+      </div>
+    `;
+            }).join('');
+
+            document.getElementById('cambio-posicion-contenido').innerHTML = bloques;
+            document.getElementById('modal-cambio-posicion').classList.remove('hidden');
+        }
+
+        function cerrarModalCambioPosicion() {
+            document.getElementById('modal-cambio-posicion').classList.add('hidden');
+        }
+
         function mostrarBanner(tipo, texto) {
             const el = document.getElementById('banner-estado');
             const contenido = document.getElementById('vista-contenido');
@@ -1463,6 +1596,7 @@
         window.ARF_RESULTADOS = { campeones: CAMPEONES_TEMPORADA, desempates: DESEMPATES_TEMPORADA };
         let CRUCES_INDEX = new Map();
         let FAVORITOS = new Set();
+        let FAVORITOS_CATEGORIAS = {}; // { claveClub: ['Primera A', 'Reserva A'] } — vacío o ausente = todas
         let VISTA_PARTIDOS_FILTRO = 'todos';
         let FAVORITOS_ESTADO_FILTRO = 'programados';
         let FAVORITOS_PAGINA = 0;
@@ -1595,7 +1729,7 @@
     <button onclick="abrirProde()" class="w-full bg-surface border border-borde rounded-2xl p-4 flex items-center gap-3 mb-4 text-left">
       <span class="text-3xl">🎯</span>
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-semibold text-texto">El Prode — Fecha ${jornada}</p>
+                <p class="text-sm font-semibold text-texto">EL PRODE</p>
         <p class="text-xs text-muted">Predecí los resultados de Primera A y competí en el ranking</p>
       </div>
       <span class="text-muted">→</span>
@@ -2083,7 +2217,7 @@
                 const fijados = bloquePartidosFijados();
                 const destacados = bloqueDestacados();
                 const enVivoFijados = calcularPartidosFijados().filter((p) => normalizarEstado(p.estado) === 'vivo').length;
-                contenedor.innerHTML = buscador + chips + tip + fijados + (destacados || (fijados ? '' : `<p class="text-center text-muted text-sm py-16">Todavía no hay partidos programados.</p>`));
+                contenedor.innerHTML = buscador + chips + bloqueTuEquipo() + tip + fijados + (destacados || (fijados ? '' : `<p class="text-center text-muted text-sm py-16">Todavía no hay partidos programados.</p>`));
                 actualizarContadorVivos(enVivoFijados);
                 configurarBuscadorPartidos();
                 return;
@@ -2505,6 +2639,151 @@
 
             filas.sort((a, b) => b.pts - a.pts || b.dif - a.dif || b.gf - a.gf);
             return filas;
+        }
+
+        function equiposFavoritosConDatos() {
+            if (!FAVORITOS.size) return [];
+            const resultado = [];
+
+            [...FAVORITOS].forEach((claveFav) => {
+                const equiposDelClubFav = filtrarPorTemporada(EQUIPOS).filter((e) => claveClub(e) === claveFav);
+                const categoriasDisponibles = [...new Set(equiposDelClubFav.map((e) => e.categoria))];
+                const categoriasElegidas = categoriasVisiblesDeClub(claveFav, categoriasDisponibles);
+
+                equiposDelClubFav
+                    .filter((equipo) => categoriasElegidas.includes(equipo.categoria))
+                    .forEach((equipo) => {
+                        const tabla = calcularTabla(equipo.categoria, 'Regular', TEMPORADA_ACTIVA);
+                        const idx = tabla.findIndex((f) => String(f.id) === String(equipo.id_equipo));
+                        if (idx === -1) return; // sin partidos jugados todavía en esta fase/temporada
+
+                        const fila = tabla[idx];
+                        const posicion = idx + 1;
+                        const totalEquipos = tabla.length;
+
+                        const partidosCat = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === equipo.categoria && normalizarFase(p.fase) === 'Regular');
+                        const proximo = partidosCat
+                            .filter((p) => normalizarEstado(p.estado) !== 'finalizado' && (String(p.id_local) === String(equipo.id_equipo) || String(p.id_visitante) === String(equipo.id_equipo)))
+                            .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')))[0] || null;
+
+                        resultado.push({ equipo, categoria: equipo.categoria, fila, posicion, totalEquipos, proximo, tabla });
+                    });
+            });
+
+            resultado.sort((a, b) => {
+                if (!a.proximo && !b.proximo) return 0;
+                if (!a.proximo) return 1; // sin próximo partido, al final
+                if (!b.proximo) return -1;
+                return String(a.proximo.fecha || '').localeCompare(String(b.proximo.fecha || ''));
+            });
+
+            return resultado;
+        }
+
+        function obtenerClubesFavoritosInfo() {
+            if (!FAVORITOS.size) return [];
+            const grupos = new Map();
+            filtrarPorTemporada(EQUIPOS).forEach((e) => {
+                const clave = claveClub(e);
+                if (!FAVORITOS.has(clave)) return;
+                if (!grupos.has(clave)) grupos.set(clave, { clave, nombre: e.nombre, categorias: new Set() });
+                grupos.get(clave).categorias.add(e.categoria);
+            });
+            return Array.from(grupos.values()).map((g) => ({ ...g, categorias: [...g.categorias] }));
+        }
+
+        function calcularAlertasZona(categoria, fila, posicion, totalEquipos, tabla) {
+            const alertas = [];
+
+            if (posicion === 1) {
+                alertas.push({ tono: 'positivo', texto: '🥇 Puntero' });
+            } else {
+                const dif = tabla[0].pts - fila.pts;
+                alertas.push({ tono: 'neutro', texto: `A ${dif} pto${dif === 1 ? '' : 's'} del líder` });
+            }
+
+            if (CATEGORIAS_CON_PLAYOFF.includes(categoria) && totalEquipos > CANTIDAD_PLAYOFF) {
+                if (posicion <= CANTIDAD_PLAYOFF) {
+                    const colchon = fila.pts - tabla[CANTIDAD_PLAYOFF].pts;
+                    alertas.push({
+                        tono: 'positivo',
+                        texto: colchon > 0 ? `En zona de playoff, ${colchon} pto${colchon === 1 ? '' : 's'} de ventaja` : 'En zona de playoff, al límite',
+                    });
+                } else {
+                    const dif = tabla[CANTIDAD_PLAYOFF - 1].pts - fila.pts;
+                    const faltan = Math.max(1, dif);
+                    alertas.push({ tono: 'alerta', texto: `A ${faltan} pto${faltan === 1 ? '' : 's'} de entrar a playoff` });
+                }
+            }
+
+            if (CATEGORIAS_CON_DESCENSO.includes(categoria) && totalEquipos > CANTIDAD_DESCENSO_GENERAL) {
+                const umbral = totalEquipos - CANTIDAD_DESCENSO_GENERAL;
+                if (posicion > umbral) {
+                    const dif = tabla[umbral - 1].pts - fila.pts;
+                    const faltan = Math.max(1, dif);
+                    alertas.push({ tono: 'peligro', texto: `A ${faltan} pto${faltan === 1 ? '' : 's'} de salir del descenso` });
+                } else if (posicion === umbral) {
+                    const dif = fila.pts - tabla[umbral].pts;
+                    const faltan = Math.max(1, dif);
+                    alertas.push({ tono: 'alerta', texto: `A ${faltan} pto${faltan === 1 ? '' : 's'} de caer a descenso` });
+                }
+            }
+
+            return alertas;
+        }
+
+        function bloqueTuEquipo() {
+            const datos = equiposFavoritosConDatos();
+            if (!datos.length) return '';
+
+            const tarjetas = datos.map(({ equipo, categoria, fila, posicion, totalEquipos, proximo, tabla }) => {
+                const alertas = calcularAlertasZona(categoria, fila, posicion, totalEquipos, tabla);
+                const chipsAlertas = alertas.map((a) => {
+                    const clase = a.tono === 'positivo' ? 'text-accent bg-accent/10'
+                        : a.tono === 'peligro' ? 'text-live bg-live/10'
+                            : a.tono === 'alerta' ? 'text-warning bg-warning/10'
+                                : 'text-muted bg-elevado';
+                    return `<span class="text-[9px] font-semibold px-2 py-0.5 rounded-full ${clase}">${escaparHtml(a.texto)}</span>`;
+                }).join('');
+
+                const rivalId = proximo ? (String(proximo.id_local) === String(equipo.id_equipo) ? proximo.id_visitante : proximo.id_local) : null;
+                const rival = rivalId ? equipoInfo(rivalId) : null;
+                const proximoTexto = proximo
+                    ? `Próximo: vs ${escaparHtml(rival?.nombre || '')} · ${formatearFechaVisual(proximo.fecha)}`
+                    : 'Sin próximo partido programado';
+
+                return `
+      <div id="tarjeta-equipo-${equipo.id_equipo}" class="w-full bg-surface border border-borde rounded-2xl p-3 mb-2 cursor-pointer" data-abrir-perfil="${equipo.id_equipo}">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <img src="${equipo.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(equipo.nombre)}');" class="w-9 h-9 rounded-full object-cover bg-elevado flex-shrink-0"/>
+                        <div class="min-w-0">
+              <p class="text-sm font-bold text-texto truncate">${escaparHtml(equipo.nombre)}</p>
+              <div class="flex items-center gap-1.5 mt-1">
+                <span class="text-[9px] font-bold uppercase tracking-wide text-sky-900 bg-sky-100 rounded-full px-2 py-0.5">${escaparHtml(categoria)}</span>
+                <span class="text-[10px] text-muted">${posicion}° de ${totalEquipos} · ${fila.pts} pts</span>
+              </div>
+            </div>
+          </div>
+          <button onclick="event.stopPropagation(); compartirTarjetaEquipoFavorito('${equipo.id_equipo}')" class="text-muted flex-shrink-0 text-base" title="Compartir" data-html2canvas-ignore="true">📤</button>
+        </div>
+        <div class="flex flex-wrap gap-1.5 mb-1.5">${chipsAlertas}</div>
+        <p class="text-[10px] text-muted">${proximoTexto}</p>
+      </div>
+    `;
+            }).join('');
+
+            return `
+    <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2">⭐ Tu equipo</h3>
+    ${tarjetas}
+  `;
+        }
+
+        function compartirTarjetaEquipoFavorito(idEquipo) {
+            const datos = equiposFavoritosConDatos().find((d) => String(d.equipo.id_equipo) === String(idEquipo));
+            if (!datos) return;
+            const texto = `⭐ ${datos.equipo.nombre} — ${datos.posicion}° en ${datos.categoria} con ${datos.fila.pts} pts.\n\nSeguí todo en FutsalHub 👉 ${window.location.href}`;
+            compartirWhatsAppConImagen(texto, 'tarjeta-equipo-' + idEquipo, 'mi_equipo_' + idEquipo);
         }
 
         let DESTACADOS_EXPANDIDOS = new Set();
@@ -3221,6 +3500,35 @@
             return EQUIPOS.find((e) => e.id_club && String(e.id_club).trim().toLowerCase() === String(idClub).trim().toLowerCase());
         }
 
+        function cargarFavoritosCategorias() {
+            try {
+                const raw = localStorage.getItem('favoritos_categorias');
+                FAVORITOS_CATEGORIAS = raw ? JSON.parse(raw) : {};
+            } catch (e) { FAVORITOS_CATEGORIAS = {}; }
+        }
+
+        function guardarFavoritosCategorias() {
+            try { localStorage.setItem('favoritos_categorias', JSON.stringify(FAVORITOS_CATEGORIAS)); } catch (e) { }
+            sincronizarFavoritosCategoriasNube();
+        }
+
+        function sincronizarFavoritosCategoriasNube() {
+            if (!PRODE_USER_ID) return;
+            supabaseClient
+                .from('prode_perfiles')
+                .update({ favoritos_categorias: FAVORITOS_CATEGORIAS })
+                .eq('user_id', PRODE_USER_ID)
+                .then(({ error }) => {
+                    if (error) console.error('No se pudieron sincronizar las categorías favoritas:', error.message);
+                });
+        }
+
+        function categoriasVisiblesDeClub(claveFav, categoriasDisponibles) {
+            const elegidas = FAVORITOS_CATEGORIAS[claveFav];
+            if (!elegidas || !elegidas.length) return categoriasDisponibles; // sin preferencia = todas
+            return categoriasDisponibles.filter((c) => elegidas.includes(c));
+        }
+
         function cargarFavoritos() {
             try {
                 const raw = localStorage.getItem('favoritos_clubes');
@@ -3230,6 +3538,7 @@
 
         function guardarFavoritos() {
             try { localStorage.setItem('favoritos_clubes', JSON.stringify([...FAVORITOS])); } catch (e) { }
+            sincronizarFavoritosNube();
         }
 
         function esFavorito(equipo) {
@@ -3242,6 +3551,7 @@
         let NOMBRE_USUARIO = null;
         let PRODE_USER_ID = null; // id de Supabase Auth del usuario logueado en el Prode
         let PRODE_SESION = null;
+        let DESTINO_LOGIN = 'prode'; // 'prode' o 'cuenta' — a dónde volver después de loguearse
 
         function obtenerDispositivoId() {
             try {
@@ -3406,6 +3716,7 @@
         async function abrirProde() {
             try { localStorage.setItem('prode_visitado', '1'); } catch (e) { }
             actualizarBadgeProde();
+            DESTINO_LOGIN = 'prode';
             document.getElementById('modal-equipo').classList.remove('hidden');
             document.getElementById('modal-contenido').innerHTML = `<p class="text-center text-muted text-sm py-8">Cargando…</p>`;
 
@@ -3418,22 +3729,71 @@
             renderFormularioProde();
         }
 
+        async function abrirCuenta() {
+            try { localStorage.setItem('prode_visitado', '1'); } catch (e) { }
+            actualizarBadgeProde();
+            DESTINO_LOGIN = 'cuenta';
+            document.getElementById('modal-equipo').classList.remove('hidden');
+            document.getElementById('modal-contenido').innerHTML = `<p class="text-center text-muted text-sm py-8">Cargando…</p>`;
+
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) {
+                renderLoginProde();
+                return;
+            }
+            await cargarSesionProde(session);
+            renderMiCuenta();
+        }
+
         async function cargarSesionProde(session) {
             PRODE_SESION = session;
             PRODE_USER_ID = session.user.id;
             const { data: perfil } = await supabaseClient
                 .from('prode_perfiles')
-                .select('nombre_apellido, club_hincha')
+                .select('nombre_apellido, club_hincha, favoritos, favoritos_categorias')
                 .eq('user_id', PRODE_USER_ID)
                 .maybeSingle();
             NOMBRE_USUARIO = perfil ? perfil.nombre_apellido : (session.user.email || 'Usuario');
             CLUB_USUARIO = perfil ? perfil.club_hincha : null;
+
+            // Unificamos los favoritos de este dispositivo con los de la cuenta,
+            // así no se pierde nada venga de donde venga.
+            const favoritosNube = new Set(perfil && Array.isArray(perfil.favoritos) ? perfil.favoritos : []);
+            FAVORITOS = new Set([...FAVORITOS, ...favoritosNube]);
+            guardarFavoritos();
+
+            const categoriasNube = perfil && perfil.favoritos_categorias ? perfil.favoritos_categorias : {};
+            FAVORITOS_CATEGORIAS = { ...FAVORITOS_CATEGORIAS, ...categoriasNube };
+            guardarFavoritosCategorias();
+        }
+
+        async function restaurarSesionSiExiste() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) return;
+            await cargarSesionProde(session);
+            // Si la vista de partidos ya estaba pintada (filtro "favoritos", chips, etc.),
+            // la refrescamos para que se vean los favoritos recién sincronizados.
+            if (!document.getElementById('vista-contenido').classList.contains('hidden')) {
+                renderVistaActual();
+            }
+            setTimeout(verificarCambioPosicionClubHinchaSiCorresponde, 3000);
+        }
+
+        function sincronizarFavoritosNube() {
+            if (!PRODE_USER_ID) return; // sin sesión, quedan solo locales
+            supabaseClient
+                .from('prode_perfiles')
+                .update({ favoritos: [...FAVORITOS] })
+                .eq('user_id', PRODE_USER_ID)
+                .then(({ error }) => {
+                    if (error) console.error('No se pudieron sincronizar los favoritos:', error.message);
+                });
         }
 
         function renderLoginProde() {
             document.getElementById('modal-contenido').innerHTML = `
     <h2 class="font-display text-lg tracking-wide mb-1">🎯 Prode</h2>
-    <p class="text-xs text-muted mb-4">Iniciá sesión para predecir y ver el ranking.</p>
+        <p class="text-xs text-muted mb-4">${DESTINO_LOGIN === 'favorito' ? 'Iniciá sesión para guardar tus equipos favoritos.' : 'Iniciá sesión para predecir y ver el ranking.'}</p>
     <input id="input-login-email" type="email" placeholder="tu@mail.com" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
     <input id="input-login-password" type="password" placeholder="Contraseña" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
     <button id="btn-login-prode" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Entrar</button>
@@ -3457,7 +3817,10 @@
                     return;
                 }
                 await cargarSesionProde(data.session);
-                renderFormularioProde();
+                renderVistaActual();
+                if (DESTINO_LOGIN === 'cuenta') renderMiCuenta();
+                else if (DESTINO_LOGIN === 'favorito') cerrarModalEquipo();
+                else renderFormularioProde();
             };
         }
 
@@ -3467,6 +3830,17 @@
             PRODE_USER_ID = null;
             NOMBRE_USUARIO = null;
             CLUB_USUARIO = null;
+
+            // Los favoritos viven ligados a la cuenta — al cerrar sesión, desaparecen
+            // de este dispositivo (la cuenta los conserva intactos para el próximo login).
+            FAVORITOS = new Set();
+            guardarFavoritos();
+            FAVORITOS_CATEGORIAS = {};
+            guardarFavoritosCategorias();
+            if (!document.getElementById('vista-contenido').classList.contains('hidden')) {
+                renderVistaActual();
+            }
+
             renderLoginProde();
         }
 
@@ -3530,7 +3904,233 @@
             }
 
             await cargarSesionProde(data.session);
+            renderVistaActual();
+            if (DESTINO_LOGIN === 'cuenta') renderMiCuenta();
+            else if (DESTINO_LOGIN === 'favorito') cerrarModalEquipo();
+            else renderFormularioProde();
+        }
+
+        function calcularStatsHistoricasEquipo(idEquipo, categoria, condicion) {
+            const partidosFinalizados = PARTIDOS.filter((p) => p.categoria === categoria && normalizarEstado(p.estado) === 'finalizado');
+            const stats = { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+            partidosFinalizados.forEach((p) => {
+                const esLocal = String(p.id_local) === String(idEquipo);
+                const esVisitante = String(p.id_visitante) === String(idEquipo);
+                if (!esLocal && !esVisitante) return;
+                if (condicion === 'local' && !esLocal) return;
+                if (condicion === 'visitante' && !esVisitante) return;
+
+                const gl = Number(p.goles_local) || 0;
+                const gv = Number(p.goles_visitante) || 0;
+                const gf = esLocal ? gl : gv;
+                const gc = esLocal ? gv : gl;
+                stats.pj++; stats.gf += gf; stats.gc += gc;
+                if (gf > gc) stats.pg++; else if (gf < gc) stats.pp++; else stats.pe++;
+            });
+            return stats;
+        }
+
+        const ELO_INICIAL = 1500;
+        const ELO_K = 20; // qué tan fuerte reacciona el rating a cada resultado — más bajo = ratings menos extremos con muchas temporadas
+        const ELO_VENTAJA_LOCAL = 65; // puntos elo de "colchón" a favor del local
+        const ELO_DIVISOR = 500; // qué tan sensible es la probabilidad a la diferencia de rating — más alto = curva más suave
+
+        let ELO_CACHE = {}; // se resetea cada vez que se recargan los datos
+
+        function calcularEloEquipos(categoria) {
+            const partidos = PARTIDOS
+                .filter((p) => p.categoria === categoria && normalizarEstado(p.estado) === 'finalizado')
+                .slice()
+                .sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || Number(a.fecha_nro) - Number(b.fecha_nro));
+
+            const ratings = new Map();
+            const obtenerRating = (id) => ratings.has(id) ? ratings.get(id) : ELO_INICIAL;
+
+            partidos.forEach((p) => {
+                const idLocal = String(p.id_local);
+                const idVisit = String(p.id_visitante);
+                const gl = Number(p.goles_local) || 0;
+                const gv = Number(p.goles_visitante) || 0;
+
+                const eloLocal = obtenerRating(idLocal);
+                const eloVisit = obtenerRating(idVisit);
+
+                const dr = (eloLocal + ELO_VENTAJA_LOCAL) - eloVisit;
+                const We = 1 / (Math.pow(10, -dr / ELO_DIVISOR) + 1); // expectativa de victoria del local (0 a 1)
+
+                let resultadoLocal;
+                if (gl > gv) resultadoLocal = 1;
+                else if (gl < gv) resultadoLocal = 0;
+                else resultadoLocal = 0.5;
+
+                // Multiplicador por margen de gol (más peso a goleadas) — misma
+                // fórmula que usa el ranking Elo histórico de selecciones nacionales.
+                const diff = Math.abs(gl - gv);
+                const G = diff <= 1 ? 1 : diff === 2 ? 1.5 : (11 + diff) / 8;
+
+                const ajuste = ELO_K * G * (resultadoLocal - We);
+                ratings.set(idLocal, eloLocal + ajuste);
+                ratings.set(idVisit, eloVisit - ajuste);
+            });
+
+            return ratings;
+        }
+
+        function obtenerRatingsEloCacheados(categoria) {
+            if (!ELO_CACHE[categoria]) ELO_CACHE[categoria] = calcularEloEquipos(categoria);
+            return ELO_CACHE[categoria];
+        }
+
+        function calcularProbabilidadesPartido(idLocal, idVisitante, categoria) {
+            const MIN_PARTIDOS = 5;
+            const historicoLocal = calcularStatsHistoricasEquipo(idLocal, categoria);
+            const historicoVisit = calcularStatsHistoricasEquipo(idVisitante, categoria);
+            if (historicoLocal.pj < MIN_PARTIDOS || historicoVisit.pj < MIN_PARTIDOS) return null;
+
+            const ratings = obtenerRatingsEloCacheados(categoria);
+            const eloLocal = ratings.has(String(idLocal)) ? ratings.get(String(idLocal)) : ELO_INICIAL;
+            const eloVisit = ratings.has(String(idVisitante)) ? ratings.get(String(idVisitante)) : ELO_INICIAL;
+
+            const dr = (eloLocal + ELO_VENTAJA_LOCAL) - eloVisit;
+            const We = 1 / (Math.pow(10, -dr / ELO_DIVISOR) + 1);
+
+            // Probabilidad de empate: más alta cuanto más parejos están los ratings,
+            // baja a medida que la diferencia de nivel crece.
+            let pEmpate = 0.28 - Math.min(0.16, Math.abs(dr) * 0.0003);
+            pEmpate = Math.max(0.12, pEmpate);
+
+            let pLocal = We - pEmpate / 2;
+            let pVisit = 1 - pLocal - pEmpate;
+            // Piso/techo más realista para un deporte de pocos goles: incluso el
+            // favorito más claro conserva un margen de sorpresa creíble.
+            pLocal = Math.max(0.06, Math.min(0.85, pLocal));
+            pVisit = Math.max(0.06, Math.min(0.85, pVisit));
+            const suma = pLocal + pEmpate + pVisit;
+            pLocal /= suma; pEmpate /= suma; pVisit /= suma;
+
+            const cuota = (p) => p > 0 ? (1 / p).toFixed(2) : '—';
+
+            return {
+                local: { prob: Math.round(pLocal * 100), cuota: cuota(pLocal), elo: Math.round(eloLocal) },
+                empate: { prob: Math.round(pEmpate * 100), cuota: cuota(pEmpate) },
+                visitante: { prob: Math.round(pVisit * 100), cuota: cuota(pVisit), elo: Math.round(eloVisit) },
+            };
+        }
+
+        function lineaProbabilidadesPartido(idLocal, idVisitante, categoria) {
+            const prob = calcularProbabilidadesPartido(idLocal, idVisitante, categoria);
+            if (!prob) return '';
+            return `
+    <div class="flex items-center justify-between gap-1 mt-2 mb-1 text-[10px]">
+      <span class="text-muted">L ${prob.local.prob}% <span class="text-texto font-semibold">(${prob.local.cuota})</span></span>
+      <span class="text-muted">E ${prob.empate.prob}% <span class="text-texto font-semibold">(${prob.empate.cuota})</span></span>
+      <span class="text-muted">V ${prob.visitante.prob}% <span class="text-texto font-semibold">(${prob.visitante.cuota})</span></span>
+    </div>
+    <p class="text-[9px] text-muted text-center mb-1">Estimación según historial en la categoría — no es una recomendación.</p>
+  `;
+        }
+
+
+
+        function renderMiCuenta() {
+            const ranking = calcularRankingProde(null);
+            const esLider = ranking.length && String(ranking[0].dispositivo_id) === String(PRODE_USER_ID);
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-display text-lg tracking-wide">Mi cuenta</h2>
+            <button onclick="cerrarSesionProde()" class="text-[10px] text-muted uppercase font-semibold">Cerrar sesión</button>
+    </div>
+    <div class="flex items-center gap-3 mb-5">
+      <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-accent text-lg font-bold flex-shrink-0">
+        ${escaparHtml((NOMBRE_USUARIO || '?').charAt(0).toUpperCase())}
+      </div>
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-texto truncate">${escaparHtml(NOMBRE_USUARIO || '')} ${esLider ? '🏆' : ''}</p>
+        <p class="text-xs text-muted truncate">${escaparHtml(PRODE_SESION?.user?.email || '')}</p>
+      </div>
+    </div>
+    <label class="text-[11px] uppercase text-muted font-semibold">Nombre y apellido</label>
+    <input id="cuenta-nombre" type="text" value="${escaparHtml(NOMBRE_USUARIO || '')}" class="w-full mt-1.5 bg-elevado border border-borde rounded-xl p-3 text-sm text-texto mb-3"/>
+    <label class="text-[11px] uppercase text-muted font-semibold">¿De qué club sos hincha?</label>
+    <select id="cuenta-club" class="w-full mt-1.5 bg-elevado border border-borde rounded-xl p-3 text-sm text-texto mb-3">
+      ${obtenerClubsUnicos().map((e) => `<option value="${escaparHtml(e.nombre)}" ${e.nombre === CLUB_USUARIO ? 'selected' : ''}>${escaparHtml(e.nombre)}</option>`).join('')}
+    </select>
+        <button id="btn-guardar-cuenta" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5 mb-2">Guardar cambios</button>
+    <p id="error-cuenta" class="text-center text-xs mt-1 mb-3 min-h-[16px]"></p>
+    <label class="text-[11px] uppercase text-muted font-semibold">Mis equipos favoritos</label>
+    <div class="mb-3">
+      ${obtenerClubesFavoritosInfo().length
+                    ? obtenerClubesFavoritosInfo().map((c) => `
+          <div class="flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mt-1.5">
+            <span class="text-sm text-texto">${escaparHtml(c.nombre)}</span>
+            ${c.categorias.length > 1
+                            ? `<button onclick='abrirSelectorCategoriasFavorito(${JSON.stringify(c.clave)}, ${JSON.stringify(c.nombre)}, ${JSON.stringify(c.categorias)}, renderMiCuenta)' class="text-[11px] font-semibold text-accent uppercase">Categorías</button>`
+                            : `<span class="text-[10px] text-muted">${escaparHtml(c.categorias[0] || '')}</span>`}
+          </div>
+        `).join('')
+                    : `<p class="text-xs text-muted">Todavía no marcaste equipos favoritos.</p>`}
+    </div>
+        <button onclick="abrirProdeDesdeCuenta()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto mb-2">🎯 Ir al Prode</button>
+    <button onclick="renderHistorialPredicciones()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto mb-2">📜 Mis predicciones</button>
+    <button onclick="compartirPosicionRanking()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto mb-2">📤 Compartir mi posición</button>
+    <div id="cuenta-admin-entry"></div>
+  `;
+
+            document.getElementById('btn-guardar-cuenta').onclick = guardarMiCuenta;
+
+            verificarSesionEsAdmin(PRODE_SESION.access_token).then((esAdmin) => {
+                if (!esAdmin) return;
+                const cont = document.getElementById('cuenta-admin-entry');
+                if (!cont) return; // la pantalla ya cambió (por ej. cerraste sesión) — no hacemos nada
+                cont.innerHTML = `
+      <button onclick="abrirModalAdmin()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-accent mt-1">⚙️ Panel de administración</button>
+    `;
+            });
+        }
+
+        async function guardarMiCuenta() {
+            const nombre = document.getElementById('cuenta-nombre').value.trim();
+            const club = document.getElementById('cuenta-club').value;
+            const estadoEl = document.getElementById('error-cuenta');
+            if (nombre.length < 3) { estadoEl.textContent = 'Ingresá tu nombre y apellido.'; estadoEl.className = 'text-center text-xs mt-1 mb-3 text-live'; return; }
+            if (!club) { estadoEl.textContent = 'Elegí tu club.'; estadoEl.className = 'text-center text-xs mt-1 mb-3 text-live'; return; }
+
+            estadoEl.textContent = 'Guardando…';
+            estadoEl.className = 'text-center text-xs mt-1 mb-3 text-muted';
+
+            const { error } = await supabaseClient
+                .from('prode_perfiles')
+                .update({ nombre_apellido: nombre, club_hincha: club })
+                .eq('user_id', PRODE_USER_ID);
+
+            if (error) {
+                estadoEl.textContent = 'Error: ' + error.message;
+                estadoEl.className = 'text-center text-xs mt-1 mb-3 text-live';
+                return;
+            }
+
+            NOMBRE_USUARIO = nombre;
+            CLUB_USUARIO = club;
+            estadoEl.textContent = '✓ Guardado.';
+            estadoEl.className = 'text-center text-xs mt-1 mb-3 text-accent';
+        }
+
+        function abrirProdeDesdeCuenta() {
+            DESTINO_LOGIN = 'prode';
             renderFormularioProde();
+        }
+
+        function compartirPosicionRanking() {
+            const ranking = calcularRankingProde(null);
+            const posicion = ranking.findIndex((r) => String(r.dispositivo_id) === String(PRODE_USER_ID)) + 1;
+            if (posicion === 0) {
+                const estadoEl = document.getElementById('error-cuenta');
+                if (estadoEl) { estadoEl.textContent = 'Todavía no tenés predicciones cargadas.'; estadoEl.className = 'text-center text-xs mt-1 mb-3 text-live'; }
+                return;
+            }
+            const texto = `🎯 Voy ${posicion}° de ${ranking.length} en el Prode de FutsalHub!\n\n¿Te animás a superarme? 👉 ${window.location.href}`;
+            compartirWhatsApp(texto);
         }
 
         async function pedirRecuperarPassword(inputEmailId, estadoElId) {
@@ -3652,6 +4252,11 @@
                 }
             });
 
+            // Contamos solo contra los partidos que siguen pendientes en esta fecha —
+            // si ya predijiste uno que después se cargó como finalizado, no debe
+            // seguir sumando al numerador (ya salió del denominador "partidos").
+            const predichosPendientes = partidos.filter((p) => misPredicciones.has(String(p.id_local) + '_' + String(p.id_visitante))).length;
+
             const filasHtml = partidos.length ? partidos.map((p) => {
                 const local = equipoInfo(p.id_local);
                 const visitante = equipoInfo(p.id_visitante);
@@ -3663,7 +4268,7 @@
                 const inputsDisabled = cerrado || bloqueadaParaEditar;
 
                 return `
-      <div class="rounded-xl p-3 mb-2 transition-colors ${bloqueadaParaEditar ? 'bg-cancha opacity-60' : 'bg-elevado'}" data-prode-partido='${JSON.stringify({ id_local: p.id_local, id_visitante: p.id_visitante, fecha_nro: p.fecha_nro, clave })}'>
+            <div class="rounded-xl p-3 mb-2 transition-colors ${bloqueadaParaEditar ? 'bg-cancha opacity-60' : 'bg-elevado'}" data-prode-partido='${JSON.stringify({ id_local: p.id_local, id_visitante: p.id_visitante, fecha_nro: p.fecha_nro, clave })}'>
         <div class="flex items-center justify-between text-xs mb-2 gap-2">
           <div class="flex items-center gap-1.5 min-w-0">
             <img src="${local.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(local.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
@@ -3674,6 +4279,7 @@
             <img src="${visitante.url_escudo || ''}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(visitante.nombre)}');" class="w-5 h-5 rounded-full object-cover bg-elevado flex-shrink-0"/>
           </div>
         </div>
+        ${lineaProbabilidadesPartido(p.id_local, p.id_visitante, p.categoria)}
         <div class="flex items-center justify-center gap-2">
           <input type="number" inputmode="numeric" pattern="[0-9]*" min="0" class="prode-input-local w-12 text-center bg-cancha border rounded-lg py-1.5 text-sm font-semibold text-texto ${previa ? 'border-accent' : 'border-borde'}" value="${previa ? previa.pred_goles_local : ''}" ${inputsDisabled ? 'disabled' : ''}/>
           <span class="text-muted text-sm">—</span>
@@ -3701,11 +4307,11 @@
       <div class="flex items-center gap-3">
         <button onclick='compartirWhatsApp(${JSON.stringify(textoCompartirProde())})' class="text-muted" title="Invitar por WhatsApp">${iconoWhatsApp(16)}</button>
         <button onclick="abrirRankingProde()" class="text-[11px] font-semibold text-accent uppercase tracking-wide">Ver ranking</button>
-        <button onclick="cerrarSesionProde()" class="text-[11px] font-semibold text-muted uppercase tracking-wide">Salir</button>
+                <button onclick="cerrarSesionProde()" class="text-[11px] font-semibold text-muted uppercase tracking-wide">Cerrar sesión</button>
       </div>
     </div>
     <p class="text-xs text-muted mb-1">${escaparHtml(NOMBRE_USUARIO)}</p>
-    <p class="text-[10px] text-accent mb-3">${misPredicciones.size}/${partidos.length} partidos predichos</p>
+        <p class="text-[10px] text-accent mb-3">${predichosPendientes}/${partidos.length} partidos predichos</p>
     <button onclick="toggleSelectorJornadaProde()" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2.5 text-sm font-semibold text-texto mb-1 flex items-center justify-between">
       <span>Fecha ${PRODE_JORNADA_SELECCIONADA}</span>
       <span class="text-muted">▾</span>
@@ -4077,6 +4683,7 @@
         let PRODE_RANKING_VISTA = 'fecha';
         let PRODE_BUSQUEDA = '';
         let PRODE_RANKING_JORNADA = null;
+        let PRODE_RANKING_SOLO_MI_CLUB = false;
         let PRODE_RANKING_PAGINA = 0;
         let PRODE_DETALLE_PAGINA = 0;
         let PRODE_EDITANDO = new Set();
@@ -4130,6 +4737,92 @@
             return Array.from(porPersona.values()).sort((a, b) => b.puntos - a.puntos || b.exactos - a.exactos);
         }
 
+        let HISTORIAL_PREDICCIONES_PAGINA = 0;
+        const HISTORIAL_PREDICCIONES_POR_PAGINA = 8;
+
+        function obtenerHistorialPredicciones() {
+            if (!PRODE_USER_ID) return [];
+            const partidosPrimeraA = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular');
+            const porPartido = new Map();
+            partidosPrimeraA.forEach((p) => {
+                porPartido.set(String(p.id_local) + '_' + String(p.id_visitante) + '_' + p.fecha_nro, p);
+            });
+
+            const misPredicciones = (PRODE_DATOS || []).filter((pr) => String(pr.dispositivo_id) === String(PRODE_USER_ID));
+
+            const resultado = misPredicciones
+                .map((pr) => {
+                    const clave = String(pr.id_local) + '_' + String(pr.id_visitante) + '_' + pr.fecha_nro;
+                    const partido = porPartido.get(clave);
+                    const puntos = partido ? calcularPuntajePrediccion(pr, partido) : null;
+                    return { pr, partido, puntos };
+                })
+                .filter((x) => x.partido);
+
+            resultado.sort((a, b) => Number(b.pr.fecha_nro) - Number(a.pr.fecha_nro));
+            return resultado;
+        }
+
+        function renderHistorialPredicciones() {
+            const historial = obtenerHistorialPredicciones();
+            const totalPaginas = Math.max(1, Math.ceil(historial.length / HISTORIAL_PREDICCIONES_POR_PAGINA));
+            if (HISTORIAL_PREDICCIONES_PAGINA >= totalPaginas) HISTORIAL_PREDICCIONES_PAGINA = totalPaginas - 1;
+            if (HISTORIAL_PREDICCIONES_PAGINA < 0) HISTORIAL_PREDICCIONES_PAGINA = 0;
+            const inicio = HISTORIAL_PREDICCIONES_PAGINA * HISTORIAL_PREDICCIONES_POR_PAGINA;
+            const items = historial.slice(inicio, inicio + HISTORIAL_PREDICCIONES_POR_PAGINA);
+
+            const filas = items.length ? items.map(({ pr, partido, puntos }) => {
+                const local = equipoInfo(pr.id_local);
+                const visitante = equipoInfo(pr.id_visitante);
+                const jugado = normalizarEstado(partido.estado) === 'finalizado';
+                const etiquetaPuntos = !jugado ? ''
+                    : puntos === 3 ? '<span class="text-[9px] font-bold text-accent bg-accent/10 rounded-full px-2 py-0.5">Exacto +3</span>'
+                        : puntos === 1 ? '<span class="text-[9px] font-bold text-warning bg-warning/10 rounded-full px-2 py-0.5">Acertaste +1</span>'
+                            : '<span class="text-[9px] font-bold text-live bg-live/10 rounded-full px-2 py-0.5">Falló</span>';
+                return `
+      <div class="bg-elevado rounded-lg px-3 py-2 mb-1.5">
+        <div class="flex items-center justify-between text-[9px] text-muted mb-1">
+          <span>Fecha ${pr.fecha_nro}</span>
+          ${etiquetaPuntos}
+        </div>
+        <div class="flex items-center justify-between text-xs">
+          <span class="truncate flex-1">${escaparHtml(local.nombre)}</span>
+          <span class="font-mono font-semibold px-2">${pr.pred_goles_local}-${pr.pred_goles_visitante}</span>
+          <span class="truncate flex-1 text-right">${escaparHtml(visitante.nombre)}</span>
+        </div>
+        ${jugado ? `<p class="text-[9px] text-muted text-center mt-0.5">Resultado real: ${partido.goles_local}-${partido.goles_visitante}</p>` : `<p class="text-[9px] text-muted text-center mt-0.5">Todavía sin jugar</p>`}
+      </div>
+    `;
+            }).join('') : `<p class="text-center text-muted text-sm py-8">Todavía no tenés predicciones cargadas.</p>`;
+
+            const paginacion = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mt-2 mb-1">
+      <button onclick="cambiarPaginaHistorialPredicciones(-1)" class="p-1.5 text-muted disabled:opacity-25" ${HISTORIAL_PREDICCIONES_PAGINA <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${HISTORIAL_PREDICCIONES_PAGINA + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaHistorialPredicciones(1)" class="p-1.5 text-muted disabled:opacity-25" ${HISTORIAL_PREDICCIONES_PAGINA >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="renderMiCuenta()" class="text-muted text-sm">←</button>
+      <h2 class="font-display text-base tracking-wide">Mis predicciones</h2>
+      <span></span>
+    </div>
+    ${filas}
+    ${paginacion}
+  `;
+        }
+
+        function cambiarPaginaHistorialPredicciones(delta) {
+            HISTORIAL_PREDICCIONES_PAGINA += delta;
+            renderHistorialPredicciones();
+        }
+
         function abrirRankingProde() {
             renderRankingProde();
         }
@@ -4144,6 +4837,10 @@
             let rankingCompleto = PRODE_RANKING_VISTA === 'fecha'
                 ? calcularRankingProde(PRODE_RANKING_JORNADA)
                 : calcularRankingProde(null);
+
+            if (PRODE_RANKING_SOLO_MI_CLUB && CLUB_USUARIO) {
+                rankingCompleto = rankingCompleto.filter((r) => (r.club || '').toLowerCase() === CLUB_USUARIO.toLowerCase());
+            }
 
             if (PRODE_BUSQUEDA.trim()) {
                 const q = PRODE_BUSQUEDA.trim().toLowerCase();
@@ -4218,13 +4915,24 @@
       <button onclick="cambiarVistaRankingProde('global')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'global' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Global</button>
       <button onclick="cambiarVistaRankingProde('participantes')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border ${PRODE_RANKING_VISTA === 'participantes' ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">Participantes</button>
     </div>
-    <input id="prode-busqueda-input" type="text" value="${escaparHtml(PRODE_BUSQUEDA)}" placeholder="Buscar participante…" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2 text-xs text-texto placeholder:text-muted mb-3"/>
+        <input id="prode-busqueda-input" type="text" value="${escaparHtml(PRODE_BUSQUEDA)}" placeholder="Buscar participante…" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2 text-xs text-texto placeholder:text-muted mb-3"/>
+    ${CLUB_USUARIO ? `
+    <button onclick="toggleRankingSoloMiClub()" class="w-full text-[11px] font-semibold px-2 py-1.5 rounded-full border mb-3 ${PRODE_RANKING_SOLO_MI_CLUB ? 'bg-accent text-cancha border-accent' : 'bg-transparent text-muted border-borde'}">
+      Solo hinchas de ${escaparHtml(CLUB_USUARIO)}
+    </button>
+  ` : ''}
     ${navegadorFecha}
     <p class="text-[10px] text-muted mb-3">🎯 Resultado exacto (3 pts) · ✓ Acierto sin marcador (1 pt) — tocá un nombre para ver el detalle</p>
     ${filas}
     ${paginacionRanking}
   `;
             configurarBusquedaProde();
+        }
+
+        function toggleRankingSoloMiClub() {
+            PRODE_RANKING_SOLO_MI_CLUB = !PRODE_RANKING_SOLO_MI_CLUB;
+            PRODE_RANKING_PAGINA = 0;
+            renderRankingProde();
         }
 
         function renderParticipantesProde() {
@@ -4375,6 +5083,10 @@
 
         function toggleFavorito(equipo, alConfirmar) {
             const clave = claveClub(equipo);
+            if (!FAVORITOS.has(clave) && !PRODE_USER_ID) {
+                pedirLoginParaFavorito();
+                return;
+            }
             if (FAVORITOS.has(clave)) {
                 CLUB_PENDIENTE_DESFAV = { equipo, alConfirmar };
                 const modal = document.getElementById('modal-confirmar-desfav');
@@ -4386,8 +5098,63 @@
             } else {
                 FAVORITOS.add(clave);
                 guardarFavoritos();
+
+                const categoriasDisponibles = [...new Set(
+                    filtrarPorTemporada(EQUIPOS).filter((e) => claveClub(e) === clave).map((e) => e.categoria)
+                )];
+                if (categoriasDisponibles.length > 1) {
+                    abrirSelectorCategoriasFavorito(clave, equipo.nombre, categoriasDisponibles, alConfirmar);
+                    return;
+                }
                 if (alConfirmar) alConfirmar();
             }
+        }
+
+        function abrirSelectorCategoriasFavorito(claveFav, nombreClub, categoriasDisponibles, alConfirmar) {
+            const elegidasActuales = FAVORITOS_CATEGORIAS[claveFav] || [];
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-1">${escaparHtml(nombreClub)}</h2>
+    <p class="text-xs text-muted mb-4">¿Qué categorías querés seguir de este club?</p>
+    <div class="space-y-2 mb-4">
+      <label class="flex items-center gap-2 bg-elevado rounded-xl p-3 text-sm text-texto">
+        <input type="checkbox" id="cat-todas" class="w-4 h-4" ${!elegidasActuales.length ? 'checked' : ''}/>
+        Todas las categorías
+      </label>
+      ${categoriasDisponibles.map((c) => `
+        <label class="flex items-center gap-2 bg-elevado rounded-xl p-3 text-sm text-texto">
+          <input type="checkbox" value="${escaparHtml(c)}" class="w-4 h-4 chk-categoria" ${elegidasActuales.includes(c) ? 'checked' : ''}/>
+          ${escaparHtml(c)}
+        </label>
+      `).join('')}
+    </div>
+    <button id="btn-guardar-categorias-favorito" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Guardar</button>
+  `;
+            document.getElementById('modal-equipo').classList.remove('hidden');
+
+            const chkTodas = document.getElementById('cat-todas');
+            const chksIndividuales = () => Array.from(document.querySelectorAll('.chk-categoria'));
+
+            chkTodas.onchange = () => {
+                if (chkTodas.checked) chksIndividuales().forEach((c) => { c.checked = false; });
+            };
+            chksIndividuales().forEach((chk) => {
+                chk.onchange = () => { if (chk.checked) chkTodas.checked = false; };
+            });
+
+            document.getElementById('btn-guardar-categorias-favorito').onclick = () => {
+                const seleccionadas = chkTodas.checked ? [] : chksIndividuales().filter((c) => c.checked).map((c) => c.value);
+                FAVORITOS_CATEGORIAS[claveFav] = seleccionadas;
+                guardarFavoritosCategorias();
+                if (VISTA_ACTIVA === 'partidos') renderVistaActual();
+                cerrarModalEquipo();
+                if (alConfirmar) alConfirmar();
+            };
+        }
+
+        function pedirLoginParaFavorito() {
+            DESTINO_LOGIN = 'favorito';
+            document.getElementById('modal-equipo').classList.remove('hidden');
+            renderLoginProde();
         }
 
         function cerrarConfirmarDesfav() {
@@ -5441,30 +6208,6 @@
             }
         }
 
-        /* ============================================================
-         *  ADMIN — PANEL DE CARGA PROTEGIDO POR PIN
-         *  Sin botón visible: se abre manteniendo presionado 2s el
-         *  título "FUTSAL LIVE" del header.
-         * ============================================================ */
-        (function configurarGestoOcultoAdmin() {
-            const titulo = document.getElementById('app-title');
-            let temporizador = null;
-
-            const iniciar = () => {
-                temporizador = setTimeout(abrirModalAdmin, 2500);
-            };
-            const cancelar = () => {
-                if (temporizador) clearTimeout(temporizador);
-            };
-
-            titulo.addEventListener('touchstart', iniciar, { passive: true });
-            titulo.addEventListener('touchend', cancelar);
-            titulo.addEventListener('touchmove', cancelar);
-            titulo.addEventListener('mousedown', iniciar);
-            titulo.addEventListener('mouseup', cancelar);
-            titulo.addEventListener('mouseleave', cancelar);
-        })();
-
         function abrirModalAdmin() {
             ADMIN_PIN_ACTUAL = null;
             renderAdminPin();
@@ -5537,7 +6280,7 @@
             document.getElementById('admin-contenido').innerHTML = `
     <div class="flex items-center justify-between mb-3">
       <h2 class="font-display text-lg tracking-wide">Panel de carga</h2>
-      <button onclick="cerrarSesionAdmin()" class="text-[10px] text-muted uppercase font-semibold">Salir</button>
+            <button onclick="cerrarSesionAdmin()" class="text-[10px] text-muted uppercase font-semibold">Cerrar sesión</button>
     </div>
     ${categorias.length ? `
       <label class="text-[11px] uppercase text-muted font-semibold">Categoría</label>
@@ -5678,7 +6421,7 @@
             cont.dataset.partidos = JSON.stringify(lista);
         }
 
-                async function enviarEdicionPartido(datos) {
+        async function enviarEdicionPartido(datos) {
             const res = await fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
@@ -5701,6 +6444,7 @@
                 soloUnGol,
                 datos: {
                     categoria: p.categoria,
+                    temporada: p.temporada,
                     fecha_nro: p.fecha_nro,
                     id_local: p.id_local,
                     id_visitante: p.id_visitante,
@@ -5925,6 +6669,7 @@
                 if (gl !== '' && gv !== '') {
                     paraGuardar.push({
                         categoria: p.categoria,
+                        temporada: p.temporada,
                         fecha_nro: p.fecha_nro,
                         id_local: p.id_local,
                         id_visitante: p.id_visitante,
@@ -6408,9 +7153,10 @@
             return `🎯 ${nombre} te invita a jugar al Prode de la Rosarina en FutsalHub!\n\nPredecí los resultados de Primera A y competí en el ranking 🏆\n\n👉 ${window.location.href}`;
         }
 
+        const ADMIN_USER_ID_PRODE = 'd59e5e34-dbf2-431d-ba78-f53811b0ebba'; // pablogranados22@gmail.com — solo cosmético (badge), la autorización real sigue validándose en el servidor
+
         function esDispositivoAdmin(dispositivoId) {
-            const registro = PRODE_DATOS.find((p) => String(p.dispositivo_id) === String(dispositivoId));
-            return !!(registro && registro.es_admin);
+            return String(dispositivoId) === ADMIN_USER_ID_PRODE;
         }
 
         function iconoPalmares(tipo) {
@@ -6708,12 +7454,14 @@
         }, 2500);
 
         cargarFavoritos();
+        cargarFavoritosCategorias();
         cargarNoticiasAplaudidasLocal();
         inicializarIdentidadProde();
         actualizarBadgeProde();
         registrarServiceWorker();
         precargarSponsorTemprano();
         cargarDatos();
+        restaurarSesionSiExiste();
     </script>
 
     <!-- MODAL DE CONFIRMACIÓN AL DESFAVORITEAR -->
