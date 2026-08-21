@@ -5600,7 +5600,9 @@
       <select id="admin-edit-sel-categoria" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"></select>
       <label class="text-[11px] uppercase text-muted font-semibold">Fecha</label>
       <select id="admin-edit-sel-jornada" class="w-full mt-1.5 mb-3 bg-elevado border border-borde rounded-xl p-2.5 text-sm text-texto"></select>
-      <div id="admin-edit-lista-partidos" class="space-y-2"></div>
+            <div id="admin-edit-lista-partidos" class="space-y-2"></div>
+      <button onclick="guardarTodosEdicionResultado()" class="w-full mt-3 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Guardar todos</button>
+      <p id="admin-edit-estado-global" class="text-center text-xs mt-2 min-h-[16px] text-muted"></p>
     ` : `<p class="text-xs text-muted text-center py-8">No hay partidos cargados.</p>`}
   `;
 
@@ -5676,18 +5678,46 @@
             cont.dataset.partidos = JSON.stringify(lista);
         }
 
-        function guardarEdicionResultado(idx) {
-            const cont = document.getElementById('admin-edit-lista-partidos');
-            const lista = JSON.parse(cont.dataset.partidos || '[]');
+                async function enviarEdicionPartido(datos) {
+            const res = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ accion: 'editarResultado', pin: ADMIN_PIN_ACTUAL, datos }),
+            }).then((r) => r.json());
+            if (!res.ok) throw new Error(res.error);
+            return res;
+        }
+
+        function leerFilaEdicion(cont, lista, idx) {
             const p = lista[idx];
             const fila = cont.querySelector(`[data-idx="${idx}"]`);
             const gl = fila.querySelector('.admin-edit-input-local').value;
             const gv = fila.querySelector('.admin-edit-input-visitante').value;
             const fecha = fila.querySelector('.admin-edit-input-fecha').value;
             const hora = fila.querySelector('.admin-edit-input-hora').value;
+            const soloUnGol = (gl === '') !== (gv === '');
+            return {
+                fila,
+                soloUnGol,
+                datos: {
+                    categoria: p.categoria,
+                    fecha_nro: p.fecha_nro,
+                    id_local: p.id_local,
+                    id_visitante: p.id_visitante,
+                    goles_local: gl,
+                    goles_visitante: gv,
+                    fecha: fecha,
+                    hora: hora,
+                },
+            };
+        }
+
+        async function guardarEdicionResultado(idx) {
+            const cont = document.getElementById('admin-edit-lista-partidos');
+            const lista = JSON.parse(cont.dataset.partidos || '[]');
+            const { fila, soloUnGol, datos } = leerFilaEdicion(cont, lista, idx);
             const estadoEl = fila.querySelector('.admin-edit-estado');
 
-            const soloUnGol = (gl === '') !== (gv === '');
             if (soloUnGol) {
                 estadoEl.textContent = 'Completá ambos marcadores, o dejalos vacíos si solo reprogramás.';
                 estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-live';
@@ -5697,36 +5727,66 @@
             estadoEl.textContent = 'Guardando…';
             estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-muted';
 
-            fetch(APPS_SCRIPT_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({
-                    accion: 'editarResultado',
-                    pin: ADMIN_PIN_ACTUAL,
-                    datos: {
-                        categoria: p.categoria,
-                        fecha_nro: p.fecha_nro,
-                        id_local: p.id_local,
-                        id_visitante: p.id_visitante,
-                        goles_local: gl,
-                        goles_visitante: gv,
-                        fecha: fecha,
-                        hora: hora,
-                    },
-                }),
-            })
-                .then((r) => r.json())
-                .then(async (data) => {
-                    if (!data.ok) throw new Error(data.error);
-                    estadoEl.textContent = '✓ Guardado.';
-                    estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-accent';
-                    await cargarDatos();
-                    renderAdminEditListaPartidos();
-                })
-                .catch((err) => {
-                    estadoEl.textContent = 'Error: ' + err.message;
-                    estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-live';
-                });
+            try {
+                await enviarEdicionPartido(datos);
+                estadoEl.textContent = '✓ Guardado.';
+                estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-accent';
+                await cargarDatos();
+                renderAdminEditListaPartidos();
+            } catch (err) {
+                estadoEl.textContent = 'Error: ' + err.message;
+                estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-live';
+            }
+        }
+
+        async function guardarTodosEdicionResultado() {
+            const cont = document.getElementById('admin-edit-lista-partidos');
+            const lista = JSON.parse(cont.dataset.partidos || '[]');
+            const filas = Array.from(cont.querySelectorAll('[data-idx]'));
+            const estadoGlobal = document.getElementById('admin-edit-estado-global');
+
+            const porEnviar = [];
+            let hayErrorValidacion = false;
+            filas.forEach((fila) => {
+                const idx = Number(fila.dataset.idx);
+                const { soloUnGol, datos } = leerFilaEdicion(cont, lista, idx);
+                if (soloUnGol) { hayErrorValidacion = true; return; }
+                porEnviar.push({ fila, datos });
+            });
+
+            if (hayErrorValidacion) {
+                estadoGlobal.textContent = 'Hay partidos con un solo marcador cargado — completá los dos o dejalos vacíos.';
+                estadoGlobal.className = 'text-center text-xs mt-2 text-live';
+                return;
+            }
+            if (!porEnviar.length) {
+                estadoGlobal.textContent = 'No hay partidos para guardar.';
+                estadoGlobal.className = 'text-center text-xs mt-2 text-live';
+                return;
+            }
+
+            estadoGlobal.textContent = `Guardando ${porEnviar.length} partido(s)…`;
+            estadoGlobal.className = 'text-center text-xs mt-2 text-muted';
+
+            const resultados = await Promise.allSettled(porEnviar.map((item) => enviarEdicionPartido(item.datos)));
+
+            let ok = 0, fallos = 0;
+            resultados.forEach((r, i) => {
+                const estadoEl = porEnviar[i].fila.querySelector('.admin-edit-estado');
+                if (r.status === 'fulfilled') {
+                    ok++;
+                    if (estadoEl) { estadoEl.textContent = '✓ Guardado.'; estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-accent'; }
+                } else {
+                    fallos++;
+                    if (estadoEl) { estadoEl.textContent = 'Error: ' + r.reason.message; estadoEl.className = 'admin-edit-estado text-center text-[10px] mt-1 text-live'; }
+                }
+            });
+
+            estadoGlobal.textContent = fallos ? `${ok} guardado(s), ${fallos} con error.` : `✓ ${ok} partido(s) guardado(s).`;
+            estadoGlobal.className = 'text-center text-xs mt-2 ' + (fallos ? 'text-live' : 'text-accent');
+
+            await cargarDatos();
+            renderAdminEditListaPartidos();
         }
 
         /* ---------- Ajustar puntos ---------- */
