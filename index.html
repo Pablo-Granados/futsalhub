@@ -198,12 +198,13 @@
                         </svg>
                     </button>
                     <button id="btn-cuenta" title="Mi cuenta" onclick="abrirCuenta()"
-                        class="w-8 h-8 flex items-center justify-center rounded-full bg-elevado text-muted active:opacity-60 flex-shrink-0">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        class="w-8 h-8 flex items-center justify-center rounded-full bg-elevado text-muted active:opacity-60 flex-shrink-0 overflow-hidden">
+                        <svg id="btn-cuenta-icono-default" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                             <circle cx="12" cy="7" r="4" />
                         </svg>
+                        <img id="btn-cuenta-avatar" class="hidden w-full h-full object-cover" />
                     </button>
                 </div>
             </div>
@@ -1132,6 +1133,7 @@
             EQUIPOS_POR_ID = new Map(equipos.map((eq) => [String(eq.id_equipo), eq]));
             PARTIDOS = partidos;
             ELO_CACHE = {}; // los ratings dependen de los partidos — se recalculan con datos frescos
+            ELO_JUGADORES_CACHE = null;
 
             JUGADORES_POR_EQUIPO = new Map();
             (jugadores || []).forEach((j) => {
@@ -1402,6 +1404,7 @@
                     dispositivo_id: pr.user_id, // mantenemos el nombre de campo viejo para no tocar el resto del Prode
                     nombre_apellido: perfil ? perfil.nombre_apellido : 'Usuario',
                     club_hincha: perfil ? perfil.club_hincha : '',
+                    avatar_url: perfil ? perfil.avatar_url : null,
                     categoria: 'Primera A',
                     temporada: pr.temporada,
                     fecha_nro: pr.fecha_nro,
@@ -1565,7 +1568,12 @@
                 const lineasAlertas = alertas.map((a) => `<p class="text-[11px] text-muted mt-1">${escaparHtml(a.texto)}</p>`).join('');
                 return `
       <div class="mb-3 last:mb-0">
-        <p class="text-sm font-semibold text-texto">${escaparHtml(equipo.nombre)} — ${escaparHtml(categoria)}</p>
+        <div class="flex items-center justify-center gap-2 mb-1">
+          ${AVATAR_USUARIO
+                        ? `<img src="${AVATAR_USUARIO}" class="w-6 h-6 rounded-full object-cover bg-cancha flex-shrink-0"/>`
+                        : `<div class="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center text-accent text-[10px] font-bold flex-shrink-0">${escaparHtml((NOMBRE_USUARIO || '?').charAt(0).toUpperCase())}</div>`}
+          <p class="text-sm font-semibold text-texto">${escaparHtml(equipo.nombre)} — ${escaparHtml(categoria)}</p>
+        </div>
         <p class="text-xs text-accent font-semibold mt-0.5">${flecha} al puesto ${posicion}° (antes ${posicionAnterior}°)</p>
         ${lineasAlertas}
       </div>
@@ -3786,16 +3794,20 @@
             renderMiCuenta();
         }
 
+        let AVATAR_USUARIO = null;
+
         async function cargarSesionProde(session) {
             PRODE_SESION = session;
             PRODE_USER_ID = session.user.id;
             const { data: perfil } = await supabaseClient
                 .from('prode_perfiles')
-                .select('nombre_apellido, club_hincha, favoritos, favoritos_categorias')
+                .select('nombre_apellido, club_hincha, favoritos, favoritos_categorias, avatar_url')
                 .eq('user_id', PRODE_USER_ID)
                 .maybeSingle();
             NOMBRE_USUARIO = perfil ? perfil.nombre_apellido : (session.user.email || 'Usuario');
             CLUB_USUARIO = perfil ? perfil.club_hincha : null;
+            AVATAR_USUARIO = perfil ? perfil.avatar_url : null;
+            actualizarIconoCuentaHeader();
 
             // Unificamos los favoritos de este dispositivo con los de la cuenta,
             // así no se pierde nada venga de donde venga.
@@ -3806,6 +3818,20 @@
             const categoriasNube = perfil && perfil.favoritos_categorias ? perfil.favoritos_categorias : {};
             FAVORITOS_CATEGORIAS = { ...FAVORITOS_CATEGORIAS, ...categoriasNube };
             guardarFavoritosCategorias();
+        }
+
+        function actualizarIconoCuentaHeader() {
+            const icono = document.getElementById('btn-cuenta-icono-default');
+            const img = document.getElementById('btn-cuenta-avatar');
+            if (!icono || !img) return;
+            if (AVATAR_USUARIO) {
+                img.src = AVATAR_USUARIO;
+                img.classList.remove('hidden');
+                icono.classList.add('hidden');
+            } else {
+                img.classList.add('hidden');
+                icono.classList.remove('hidden');
+            }
         }
 
         async function restaurarSesionSiExiste() {
@@ -3871,6 +3897,8 @@
             PRODE_USER_ID = null;
             NOMBRE_USUARIO = null;
             CLUB_USUARIO = null;
+            AVATAR_USUARIO = null;
+            actualizarIconoCuentaHeader();
 
             // Los favoritos viven ligados a la cuenta — al cerrar sesión, desaparecen
             // de este dispositivo (la cuenta los conserva intactos para el próximo login).
@@ -4025,6 +4053,219 @@
             return ratings;
         }
 
+        function buscarEquipoPrimeraAPorClub(nombreClub) {
+            if (!nombreClub) return null;
+            const equipoRef = filtrarPorTemporada(EQUIPOS).find((e) => e.nombre === nombreClub);
+            if (!equipoRef) return null;
+            const clave = claveClub(equipoRef);
+            return filtrarPorTemporada(EQUIPOS).find((e) => claveClub(e) === clave && e.categoria === 'Primera A') || null;
+        }
+
+        function abrirComparativaProde(otroId) {
+            const registroOtro = (PRODE_DATOS || []).find((pr) => String(pr.dispositivo_id) === String(otroId));
+            if (!registroOtro) return;
+
+            const rankingGlobal = calcularRankingProde(null);
+            const miStats = rankingGlobal.find((r) => String(r.dispositivo_id) === String(PRODE_USER_ID)) || { puntos: 0, exactos: 0, aciertos: 0, predicciones: 0 };
+            const otroStats = rankingGlobal.find((r) => String(r.dispositivo_id) === String(otroId)) || { puntos: 0, exactos: 0, aciertos: 0, predicciones: 0 };
+
+            const ratingsJugadores = obtenerRatingsJugadoresProdeCacheados();
+            const miElo = Math.round(ratingsJugadores.has(String(PRODE_USER_ID)) ? ratingsJugadores.get(String(PRODE_USER_ID)) : ELO_JUGADOR_INICIAL);
+            const otroElo = Math.round(ratingsJugadores.has(String(otroId)) ? ratingsJugadores.get(String(otroId)) : ELO_JUGADOR_INICIAL);
+
+            const filaComparativa = (etiqueta, miValor, otroValor, ganaSiMayor = true) => {
+                const gano = ganaSiMayor ? miValor > otroValor : miValor < otroValor;
+                const perdio = ganaSiMayor ? miValor < otroValor : miValor > otroValor;
+                return `
+        <div class="flex items-center justify-between text-sm py-2 border-b border-borde/60 last:border-0">
+          <span class="font-mono font-bold w-16 text-left ${gano ? 'text-accent' : perdio ? 'text-muted' : 'text-texto'}">${miValor}</span>
+          <span class="text-[10px] text-muted uppercase text-center flex-1">${etiqueta}</span>
+          <span class="font-mono font-bold w-16 text-right ${!gano && otroValor !== miValor ? 'text-accent' : 'text-muted'}">${otroValor}</span>
+        </div>
+      `;
+            };
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-display text-lg tracking-wide">⚔️ Comparativa</h2>
+      <button onclick="renderRankingProde()" class="text-[11px] font-semibold text-accent uppercase tracking-wide">← Volver</button>
+    </div>
+    <div class="flex items-center justify-between mb-4 gap-2">
+      <div class="text-center flex-1 min-w-0">
+        ${AVATAR_USUARIO ? `<img src="${AVATAR_USUARIO}" class="w-12 h-12 rounded-full object-cover mx-auto mb-1"/>` : `<div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-accent font-bold mx-auto mb-1">${escaparHtml((NOMBRE_USUARIO || '?').charAt(0).toUpperCase())}</div>`}
+        <p class="text-xs text-texto truncate">${escaparHtml(NOMBRE_USUARIO || '')}</p>
+      </div>
+      <span class="text-muted text-xs flex-shrink-0">VS</span>
+      <div class="text-center flex-1 min-w-0">
+        ${registroOtro.avatar_url ? `<img src="${registroOtro.avatar_url}" class="w-12 h-12 rounded-full object-cover mx-auto mb-1"/>` : `<div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-accent font-bold mx-auto mb-1">${escaparHtml((registroOtro.nombre_apellido || '?').charAt(0).toUpperCase())}</div>`}
+        <p class="text-xs text-texto truncate">${escaparHtml(registroOtro.nombre_apellido || '')}</p>
+      </div>
+    </div>
+    <div class="bg-elevado rounded-xl px-3 py-1 mb-3">
+      ${filaComparativa('Puntos Prode', miStats.puntos, otroStats.puntos)}
+      ${filaComparativa('Exactos', miStats.exactos, otroStats.exactos)}
+      ${filaComparativa('Aciertos', miStats.aciertos, otroStats.aciertos)}
+    </div>
+        <p class="text-[10px] uppercase tracking-wide text-muted text-center mb-1">Rating Elo del Prode</p>
+    <div class="bg-elevado rounded-xl px-3 py-1 mb-1">
+      ${filaComparativa('Rating', miElo, otroElo)}
+    </div>
+    <p class="text-[9px] text-muted text-center">Se calcula fecha a fecha, comparando tus puntos contra los de todos los que jugaron esa jornada.</p>
+  `;
+        }
+
+        const ELO_JUGADOR_INICIAL = 1500;
+        const ELO_JUGADOR_K = 32;
+
+        let ELO_JUGADORES_CACHE = null;
+
+        function fechaProdeCompletamenteJugada(fechaNro) {
+            const partidos = filtrarPorTemporada(PARTIDOS).filter(
+                (p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular' && Number(p.fecha_nro) === fechaNro
+            );
+            return partidos.length > 0 && partidos.every((p) => normalizarEstado(p.estado) === 'finalizado');
+        }
+
+        function calcularEloJugadoresProde() {
+            const partidosPrimeraA = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular');
+            const porPartido = new Map();
+            partidosPrimeraA.forEach((p) => porPartido.set(String(p.id_local) + '_' + String(p.id_visitante) + '_' + p.fecha_nro, p));
+
+            // No exigimos la fecha completa — cada predicción se cuenta apenas su
+            // partido puntual tiene resultado, aunque otro de la misma jornada
+            // siga pendiente o reprogramado.
+            const fechas = [...new Set((PRODE_DATOS || []).map((pr) => Number(pr.fecha_nro)))].sort((a, b) => a - b);
+
+            const ratings = new Map();
+            const obtenerRating = (id) => ratings.has(id) ? ratings.get(id) : ELO_JUGADOR_INICIAL;
+
+            fechas.forEach((fecha) => {
+                const puntosPorJugador = new Map();
+                (PRODE_DATOS || []).forEach((pr) => {
+                    if (Number(pr.fecha_nro) !== fecha) return;
+                    const partido = porPartido.get(String(pr.id_local) + '_' + String(pr.id_visitante) + '_' + pr.fecha_nro);
+                    const puntos = calcularPuntajePrediccion(pr, partido);
+                    if (puntos == null) return;
+                    const clave = String(pr.dispositivo_id);
+                    puntosPorJugador.set(clave, (puntosPorJugador.get(clave) || 0) + puntos);
+                });
+
+                const participantes = [...puntosPorJugador.keys()];
+                if (participantes.length < 2) return; // nadie con quién comparar esa fecha
+
+                const deltas = new Map(participantes.map((id) => [id, 0]));
+                for (let i = 0; i < participantes.length; i++) {
+                    for (let j = 0; j < participantes.length; j++) {
+                        if (i === j) continue;
+                        const idA = participantes[i];
+                        const idB = participantes[j];
+                        const eloA = obtenerRating(idA);
+                        const eloB = obtenerRating(idB);
+                        const esperadoA = 1 / (Math.pow(10, (eloB - eloA) / 400) + 1);
+                        const puntosA = puntosPorJugador.get(idA);
+                        const puntosB = puntosPorJugador.get(idB);
+                        const realA = puntosA > puntosB ? 1 : puntosA < puntosB ? 0 : 0.5;
+                        deltas.set(idA, deltas.get(idA) + (realA - esperadoA));
+                    }
+                }
+
+                participantes.forEach((id) => {
+                    const rivales = participantes.length - 1;
+                    const ajuste = ELO_JUGADOR_K * (deltas.get(id) / rivales);
+                    ratings.set(id, obtenerRating(id) + ajuste);
+                });
+            });
+
+            return ratings;
+        }
+
+                function diagnosticarEloJugador(dispositivoId) {
+            const partidosPrimeraA = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular');
+            const porPartido = new Map();
+            partidosPrimeraA.forEach((p) => porPartido.set(String(p.id_local) + '_' + String(p.id_visitante) + '_' + p.fecha_nro, p));
+
+            const fechas = [...new Set((PRODE_DATOS || []).map((pr) => Number(pr.fecha_nro)))].sort((a, b) => a - b);
+            const ratings = new Map();
+            const obtenerRating = (id) => ratings.has(id) ? ratings.get(id) : ELO_JUGADOR_INICIAL;
+
+            console.log('--- Evolución de Elo para', dispositivoId, '---');
+
+            fechas.forEach((fecha) => {
+                const puntosPorJugador = new Map();
+                (PRODE_DATOS || []).forEach((pr) => {
+                    if (Number(pr.fecha_nro) !== fecha) return;
+                    const partido = porPartido.get(String(pr.id_local) + '_' + String(pr.id_visitante) + '_' + pr.fecha_nro);
+                    const puntos = calcularPuntajePrediccion(pr, partido);
+                    if (puntos == null) return;
+                    const clave = String(pr.dispositivo_id);
+                    puntosPorJugador.set(clave, (puntosPorJugador.get(clave) || 0) + puntos);
+                });
+
+                const participantes = [...puntosPorJugador.keys()];
+                if (participantes.length < 2) return;
+
+                const eloAntes = obtenerRating(String(dispositivoId));
+
+                const deltas = new Map(participantes.map((id) => [id, 0]));
+                for (let i = 0; i < participantes.length; i++) {
+                    for (let j = 0; j < participantes.length; j++) {
+                        if (i === j) continue;
+                        const idA = participantes[i];
+                        const idB = participantes[j];
+                        const eloA = obtenerRating(idA);
+                        const eloB = obtenerRating(idB);
+                        const esperadoA = 1 / (Math.pow(10, (eloB - eloA) / 400) + 1);
+                        const puntosA = puntosPorJugador.get(idA);
+                        const puntosB = puntosPorJugador.get(idB);
+                        const realA = puntosA > puntosB ? 1 : puntosA < puntosB ? 0 : 0.5;
+                        deltas.set(idA, deltas.get(idA) + (realA - esperadoA));
+                    }
+                }
+
+                participantes.forEach((id) => {
+                    const rivales = participantes.length - 1;
+                    const ajuste = ELO_JUGADOR_K * (deltas.get(id) / rivales);
+                    ratings.set(id, obtenerRating(id) + ajuste);
+                });
+
+                if (puntosPorJugador.has(String(dispositivoId))) {
+                    console.log(
+                        'Fecha ' + fecha,
+                        '| mis puntos: ' + puntosPorJugador.get(String(dispositivoId)),
+                        '| rivales: ' + (participantes.length - 1),
+                        '| elo ' + Math.round(eloAntes) + ' → ' + Math.round(obtenerRating(String(dispositivoId)))
+                    );
+                }
+            });
+
+            console.log('Elo final: ' + Math.round(obtenerRating(String(dispositivoId))));
+        }
+
+        function diagnosticarEloJugadorPorNombre(nombreParcial) {
+            const registro = (PRODE_DATOS || []).find((pr) => (pr.nombre_apellido || '').toLowerCase().includes(nombreParcial.toLowerCase()));
+            if (!registro) { console.log('No encontré a nadie con ese nombre.'); return; }
+            diagnosticarEloJugador(registro.dispositivo_id);
+        }
+
+        function abrirQueEsElo() {
+            const modal = document.getElementById('modal-que-es-elo');
+            modal.style.zIndex = '999999';
+            modal.style.position = 'fixed';
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+        }
+
+        function cerrarQueEsElo() {
+            const modal = document.getElementById('modal-que-es-elo');
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+
+        function obtenerRatingsJugadoresProdeCacheados() {
+            if (!ELO_JUGADORES_CACHE) ELO_JUGADORES_CACHE = calcularEloJugadoresProde();
+            return ELO_JUGADORES_CACHE;
+        }
+
         function obtenerRatingsEloCacheados(categoria) {
             if (!ELO_CACHE[categoria]) ELO_CACHE[categoria] = calcularEloEquipos(categoria);
             return ELO_CACHE[categoria];
@@ -4090,10 +4331,18 @@
       <h2 class="font-display text-lg tracking-wide">Mi cuenta</h2>
             <button onclick="cerrarSesionProde()" class="text-[10px] text-muted uppercase font-semibold">Cerrar sesión</button>
     </div>
-    <div class="flex items-center gap-3 mb-5">
-      <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-accent text-lg font-bold flex-shrink-0">
-        ${escaparHtml((NOMBRE_USUARIO || '?').charAt(0).toUpperCase())}
+        <div class="flex items-center gap-3 mb-5">
+            <div class="relative w-12 h-12 flex-shrink-0">
+        <div id="avatar-circulo" onclick="document.getElementById('input-avatar-file').click()" class="w-12 h-12 rounded-full ${AVATAR_USUARIO ? '' : 'bg-accent/10'} flex items-center justify-center text-accent text-lg font-bold cursor-pointer overflow-hidden">
+          ${AVATAR_USUARIO ? `<img src="${AVATAR_USUARIO}" class="w-full h-full object-cover"/>` : escaparHtml((NOMBRE_USUARIO || '?').charAt(0).toUpperCase())}
+        </div>
+        <div id="avatar-loader" class="hidden absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+          <svg class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        </div>
+        <span onclick="document.getElementById('input-avatar-file').click()" class="absolute -bottom-0.5 -right-0.5 bg-elevado border border-borde rounded-full w-5 h-5 flex items-center justify-center text-[10px] cursor-pointer">✏️</span>
+                <input id="input-avatar-file" type="file" accept="image/*" class="hidden" onchange="abrirRecortarAvatar(this.files[0])"/>
       </div>
+            ${AVATAR_USUARIO ? `<button onclick="pedirConfirmarEliminarAvatar()" class="text-[11px] font-semibold text-live uppercase tracking-wide flex items-center gap-1">🗑️ </button>` : ''}
       <div class="min-w-0">
         <p class="text-sm font-semibold text-texto truncate">${escaparHtml(NOMBRE_USUARIO || '')} ${esLider ? '🏆' : ''}</p>
         <p class="text-xs text-muted truncate">${escaparHtml(PRODE_SESION?.user?.email || '')}</p>
@@ -4163,6 +4412,185 @@
             CLUB_USUARIO = club;
             estadoEl.textContent = '✓ Guardado.';
             estadoEl.className = 'text-center text-xs mt-1 mb-3 text-accent';
+        }
+
+        let RECORTE_AVATAR_ESTADO = null;
+
+        function abrirRecortarAvatar(file) {
+            if (!file) return;
+            if (!file.type.startsWith('image/')) { alert('Elegí un archivo de imagen.'); return; }
+            if (file.size > 8 * 1024 * 1024) { alert('La imagen no puede pesar más de 8MB.'); return; }
+
+            const img = new Image();
+            img.onload = () => {
+                const lado = Math.min(img.width, img.height);
+                RECORTE_AVATAR_ESTADO = {
+                    img,
+                    lado,
+                    offsetX: (img.width - lado) / 2,
+                    offsetY: (img.height - lado) / 2,
+                };
+                renderModalRecorteAvatar();
+            };
+            img.onerror = () => alert('No se pudo leer la imagen.');
+            img.src = URL.createObjectURL(file);
+        }
+
+        function renderModalRecorteAvatar() {
+            const VISOR = 280;
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-1">Ajustá tu foto</h2>
+    <p class="text-xs text-muted mb-3">Arrastrá la imagen para elegir qué parte se recorta.</p>
+    <div id="recorte-visor" class="relative mx-auto rounded-full overflow-hidden bg-cancha border-2 border-accent cursor-move" style="width:${VISOR}px;height:${VISOR}px;touch-action:none;">
+      <canvas id="recorte-canvas" width="${VISOR}" height="${VISOR}" class="absolute inset-0"></canvas>
+    </div>
+    <p class="text-[10px] text-muted text-center mt-2">El círculo es lo que se va a ver</p>
+    <div class="flex gap-2 mt-4">
+      <button onclick="cancelarRecorteAvatar()" class="flex-1 bg-elevado text-texto font-semibold text-sm rounded-xl py-2.5">Cancelar</button>
+      <button onclick="confirmarRecorteAvatar()" class="flex-1 bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Usar esta foto</button>
+    </div>
+  `;
+            document.getElementById('modal-equipo').classList.remove('hidden');
+            dibujarRecorteAvatar(VISOR);
+            configurarArrastreRecorteAvatar(VISOR);
+        }
+
+        function dibujarRecorteAvatar(visor) {
+            const canvas = document.getElementById('recorte-canvas');
+            if (!canvas || !RECORTE_AVATAR_ESTADO) return;
+            const ctx = canvas.getContext('2d');
+            const { img, lado, offsetX, offsetY } = RECORTE_AVATAR_ESTADO;
+            ctx.clearRect(0, 0, visor, visor);
+            ctx.drawImage(img, offsetX, offsetY, lado, lado, 0, 0, visor, visor);
+        }
+
+        function configurarArrastreRecorteAvatar(visor) {
+            const visorEl = document.getElementById('recorte-visor');
+            if (!visorEl) return;
+            let arrastrando = false;
+            let inicioX = 0, inicioY = 0;
+
+            const empezar = (x, y) => { arrastrando = true; inicioX = x; inicioY = y; };
+            const mover = (x, y) => {
+                if (!arrastrando || !RECORTE_AVATAR_ESTADO) return;
+                const { img, lado } = RECORTE_AVATAR_ESTADO;
+                const dx = (x - inicioX) * (lado / visor);
+                const dy = (y - inicioY) * (lado / visor);
+                inicioX = x; inicioY = y;
+
+                RECORTE_AVATAR_ESTADO.offsetX = Math.max(0, Math.min(img.width - lado, RECORTE_AVATAR_ESTADO.offsetX - dx));
+                RECORTE_AVATAR_ESTADO.offsetY = Math.max(0, Math.min(img.height - lado, RECORTE_AVATAR_ESTADO.offsetY - dy));
+                dibujarRecorteAvatar(visor);
+            };
+            const terminar = () => { arrastrando = false; };
+
+            visorEl.addEventListener('mousedown', (e) => empezar(e.clientX, e.clientY));
+            window.addEventListener('mousemove', (e) => mover(e.clientX, e.clientY));
+            window.addEventListener('mouseup', terminar);
+            visorEl.addEventListener('touchstart', (e) => { const t = e.touches[0]; empezar(t.clientX, t.clientY); }, { passive: true });
+            visorEl.addEventListener('touchmove', (e) => { const t = e.touches[0]; mover(t.clientX, t.clientY); }, { passive: true });
+            visorEl.addEventListener('touchend', terminar);
+        }
+
+        function cancelarRecorteAvatar() {
+            RECORTE_AVATAR_ESTADO = null;
+            renderMiCuenta();
+        }
+
+        function confirmarRecorteAvatar() {
+            if (!RECORTE_AVATAR_ESTADO) return;
+            const { img, lado, offsetX, offsetY } = RECORTE_AVATAR_ESTADO;
+            const TAMANO_SALIDA = 400;
+            const canvas = document.createElement('canvas');
+            canvas.width = TAMANO_SALIDA;
+            canvas.height = TAMANO_SALIDA;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, offsetX, offsetY, lado, lado, 0, 0, TAMANO_SALIDA, TAMANO_SALIDA);
+
+            canvas.toBlob(async (blob) => {
+                RECORTE_AVATAR_ESTADO = null;
+                if (!blob) { alert('No se pudo procesar la imagen.'); renderMiCuenta(); return; }
+                renderMiCuenta();
+                await subirAvatarBlob(blob);
+            }, 'image/jpeg', 0.9);
+        }
+
+        async function subirAvatarBlob(blob) {
+            if (!PRODE_USER_ID) return;
+            const estadoEl = document.getElementById('error-cuenta');
+            mostrarLoaderAvatar(true);
+            if (estadoEl) { estadoEl.textContent = 'Subiendo foto…'; estadoEl.className = 'text-center text-xs mt-1 mb-3 text-muted'; }
+
+            const ruta = `${PRODE_USER_ID}/avatar.jpg`;
+            const { error: errorSubida } = await supabaseClient.storage
+                .from('avatars')
+                .upload(ruta, blob, { upsert: true, contentType: 'image/jpeg' });
+
+            if (errorSubida) {
+                mostrarLoaderAvatar(false);
+                if (estadoEl) { estadoEl.textContent = 'Error al subir: ' + errorSubida.message; estadoEl.className = 'text-center text-xs mt-1 mb-3 text-live'; }
+                return;
+            }
+
+            const { data: urlData } = supabaseClient.storage.from('avatars').getPublicUrl(ruta);
+            const avatarUrl = urlData.publicUrl + '?t=' + Date.now();
+
+            const { error: errorGuardado } = await supabaseClient
+                .from('prode_perfiles')
+                .update({ avatar_url: avatarUrl })
+                .eq('user_id', PRODE_USER_ID);
+
+            if (errorGuardado) {
+                mostrarLoaderAvatar(false);
+                if (estadoEl) { estadoEl.textContent = 'Error al guardar: ' + errorGuardado.message; estadoEl.className = 'text-center text-xs mt-1 mb-3 text-live'; }
+                return;
+            }
+
+            AVATAR_USUARIO = avatarUrl;
+            actualizarIconoCuentaHeader();
+            mostrarLoaderAvatar(false);
+            renderMiCuenta();
+        }
+
+        function mostrarLoaderAvatar(mostrar) {
+            const loader = document.getElementById('avatar-loader');
+            if (loader) loader.classList.toggle('hidden', !mostrar);
+        }
+
+        function pedirConfirmarEliminarAvatar() {
+            const modal = document.getElementById('modal-confirmar-eliminar-avatar');
+            modal.style.zIndex = '999999';
+            modal.style.position = 'fixed';
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+        }
+
+        function cerrarConfirmarEliminarAvatar() {
+            const modal = document.getElementById('modal-confirmar-eliminar-avatar');
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+
+        async function confirmarEliminarAvatar() {
+            cerrarConfirmarEliminarAvatar();
+            if (!PRODE_USER_ID) return;
+            const estadoEl = document.getElementById('error-cuenta');
+            mostrarLoaderAvatar(true);
+
+            const { error } = await supabaseClient
+                .from('prode_perfiles')
+                .update({ avatar_url: null })
+                .eq('user_id', PRODE_USER_ID);
+
+            mostrarLoaderAvatar(false);
+            if (error) {
+                if (estadoEl) { estadoEl.textContent = 'Error: ' + error.message; estadoEl.className = 'text-center text-xs mt-1 mb-3 text-live'; }
+                return;
+            }
+
+            AVATAR_USUARIO = null;
+            actualizarIconoCuentaHeader();
+            renderMiCuenta();
         }
 
         function abrirProdeDesdeCuenta() {
@@ -4772,11 +5200,12 @@
 
                 const claveDispositivo = String(pr.dispositivo_id);
                 if (!porPersona.has(claveDispositivo)) {
-                    porPersona.set(claveDispositivo, { dispositivo_id: claveDispositivo, nombre: pr.nombre_apellido, club: pr.club_hincha || '', puntos: 0, exactos: 0, aciertos: 0, predicciones: 0 });
+                    porPersona.set(claveDispositivo, { dispositivo_id: claveDispositivo, nombre: pr.nombre_apellido, club: pr.club_hincha || '', foto: pr.avatar_url || null, puntos: 0, exactos: 0, aciertos: 0, predicciones: 0 });
                 }
                 const e = porPersona.get(claveDispositivo);
                 e.nombre = pr.nombre_apellido;
                 e.club = pr.club_hincha || e.club;
+                e.foto = pr.avatar_url || e.foto;
                 e.puntos += puntos;
                 e.predicciones++;
                 if (puntos === 3) e.exactos++;
@@ -4862,6 +5291,12 @@
       <h2 class="font-display text-base tracking-wide">Mis predicciones</h2>
       <span></span>
     </div>
+    <div class="flex items-center gap-2 mb-3">
+      ${AVATAR_USUARIO
+                    ? `<img src="${AVATAR_USUARIO}" class="w-7 h-7 rounded-full object-cover bg-cancha flex-shrink-0"/>`
+                    : `<div class="w-7 h-7 rounded-full bg-accent/10 flex items-center justify-center text-accent text-xs font-bold flex-shrink-0">${escaparHtml((NOMBRE_USUARIO || '?').charAt(0).toUpperCase())}</div>`}
+      <span class="text-sm text-texto truncate">${escaparHtml(NOMBRE_USUARIO || '')}</span>
+    </div>
     ${filas}
     ${paginacion}
   `;
@@ -4896,10 +5331,10 @@
                 rankingCompleto = rankingCompleto.filter((r) => r.nombre.toLowerCase().includes(q) || (r.club || '').toLowerCase().includes(q));
             }
 
-            const totalPaginas = Math.max(1, Math.ceil(rankingCompleto.length / 10));
+            const totalPaginas = Math.max(1, Math.ceil(rankingCompleto.length / 8));
             const paginaRanking = Math.min(Math.max(PRODE_RANKING_PAGINA, 0), totalPaginas - 1);
-            const inicio = paginaRanking * 10;
-            const ranking = rankingCompleto.slice(inicio, inicio + 10);
+            const inicio = paginaRanking * 8;
+            const ranking = rankingCompleto.slice(inicio, inicio + 8);
             const idx = jornadasDisponiblesTodas.indexOf(PRODE_RANKING_JORNADA);
             const navegadorFecha = PRODE_RANKING_VISTA === 'fecha' ? `
     <div class="flex items-center justify-between mb-3">
@@ -4925,21 +5360,29 @@
                 ? ranking.map((r, i) => {
                     const posicion = inicio + i + 1;
                     return `
-        <button onclick='abrirDetalleUsuarioProde(${JSON.stringify(r.dispositivo_id)}, ${PRODE_RANKING_VISTA === 'fecha' ? PRODE_RANKING_JORNADA : 'null'})' class="w-full flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mb-2 text-left">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="font-mono text-xs text-muted w-5 flex-shrink-0">${posicion}</span>
-            <div class="flex items-center gap-1.5 min-w-0">
-              <span class="text-sm text-texto truncate">${medalla(posicion)}${escaparHtml(r.nombre)}</span>
-              ${esDispositivoAdmin(r.dispositivo_id)
+        <div class="flex items-center gap-2 mb-2">
+          <button onclick='abrirDetalleUsuarioProde(${JSON.stringify(r.dispositivo_id)}, ${PRODE_RANKING_VISTA === 'fecha' ? PRODE_RANKING_JORNADA : 'null'})' class="flex-1 min-w-0 flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 text-left">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-mono text-xs text-muted w-5 flex-shrink-0">${posicion}</span>
+              ${r.foto
+                            ? `<img src="${r.foto}" class="w-6 h-6 rounded-full object-cover bg-cancha flex-shrink-0"/>`
+                            : `<div class="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center text-accent text-[10px] font-bold flex-shrink-0">${escaparHtml((r.nombre || '?').charAt(0).toUpperCase())}</div>`}
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-sm text-texto truncate">${medalla(posicion)}${escaparHtml(r.nombre)}</span>
+                ${esDispositivoAdmin(r.dispositivo_id)
                             ? `<span class="text-[9px] font-semibold text-accent uppercase flex-shrink-0">Admin</span>`
                             : (r.club ? `<img src="${escudoClubPorNombre(r.club)}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(r.club)}');" class="w-4 h-4 rounded-full object-cover bg-elevado flex-shrink-0" title="${escaparHtml(r.club)}"/>` : '')}
+              </div>
             </div>
-          </div>
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <span class="text-[10px] text-muted">${r.exactos}🎯 ${r.aciertos}✓</span>
-            <span class="font-mono text-sm font-bold text-accent">${r.puntos} pts</span>
-          </div>
-        </button>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <span class="text-[10px] text-muted">${r.exactos}🎯 ${r.aciertos}✓</span>
+              <span class="font-mono text-sm font-bold text-accent">${r.puntos} pts</span>
+            </div>
+          </button>
+          ${String(r.dispositivo_id) !== String(PRODE_USER_ID) ? `
+            <button onclick='abrirComparativaProde(${JSON.stringify(r.dispositivo_id)})' class="flex-shrink-0 bg-elevado rounded-xl px-2.5 py-2.5 text-[11px] font-semibold text-accent">VS ⚔️</button>
+          ` : ''}
+        </div>
       `;
                 }).join('')
                 : `<p class="text-center text-muted text-sm py-8">Sin resultados${PRODE_BUSQUEDA.trim() ? ` para "${escaparHtml(PRODE_BUSQUEDA)}"` : (PRODE_RANKING_VISTA === 'fecha' ? ' para esta fecha' : '')}.</p>`;
@@ -4971,7 +5414,7 @@
     </button>
   ` : ''}
     ${navegadorFecha}
-    <p class="text-[10px] text-muted mb-3">🎯 Resultado exacto (3 pts) · ✓ Acierto sin marcador (1 pt) — tocá un nombre para ver el detalle</p>
+    <p class="text-[10px] text-muted mb-3">🎯 Exacto (+3) · ✓ Acierto (+1) — tocá un nombre para ver el detalle</p>
     ${filas}
     ${paginacionRanking}
   `;
@@ -4984,33 +5427,78 @@
             renderRankingProde();
         }
 
+        let PRODE_PARTICIPANTES_PAGINA = 0;
+        const PRODE_PARTICIPANTES_POR_PAGINA = 8;
+
+        function medallaPosicion(posicion) {
+            if (posicion === 1) return '🏆 ';
+            if (posicion === 2) return '🥈 ';
+            if (posicion === 3) return '🥉 ';
+            return '';
+        }
+
         function renderParticipantesProde() {
             const nombresUnicos = new Map();
             (PRODE_DATOS || []).forEach((pr) => {
                 const clave = String(pr.dispositivo_id);
                 if (!nombresUnicos.has(clave)) {
-                    nombresUnicos.set(clave, { dispositivo_id: clave, nombre: pr.nombre_apellido, club: pr.club_hincha || '' });
+                    nombresUnicos.set(clave, { dispositivo_id: clave, nombre: pr.nombre_apellido, club: pr.club_hincha || '', foto: pr.avatar_url || null });
                 }
             });
-            let lista = Array.from(nombresUnicos.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+            const ratingsJugadores = obtenerRatingsJugadoresProdeCacheados();
+            let lista = Array.from(nombresUnicos.values()).map((p) => ({
+                ...p,
+                elo: Math.round(ratingsJugadores.has(p.dispositivo_id) ? ratingsJugadores.get(p.dispositivo_id) : ELO_JUGADOR_INICIAL),
+            }));
+            lista.sort((a, b) => b.elo - a.elo);
 
             if (PRODE_BUSQUEDA.trim()) {
                 const q = PRODE_BUSQUEDA.trim().toLowerCase();
                 lista = lista.filter((p) => p.nombre.toLowerCase().includes(q) || (p.club || '').toLowerCase().includes(q));
             }
 
-            const filas = lista.length
-                ? lista.map((p) => `
+            const totalPaginas = Math.max(1, Math.ceil(lista.length / PRODE_PARTICIPANTES_POR_PAGINA));
+            if (PRODE_PARTICIPANTES_PAGINA >= totalPaginas) PRODE_PARTICIPANTES_PAGINA = totalPaginas - 1;
+            if (PRODE_PARTICIPANTES_PAGINA < 0) PRODE_PARTICIPANTES_PAGINA = 0;
+            const inicio = PRODE_PARTICIPANTES_PAGINA * PRODE_PARTICIPANTES_POR_PAGINA;
+            const pagina = lista.slice(inicio, inicio + PRODE_PARTICIPANTES_POR_PAGINA);
+
+            const filas = pagina.length
+                ? pagina.map((p, i) => {
+                    const posicion = inicio + i + 1;
+                    return `
         <button onclick='abrirDetalleUsuarioProde(${JSON.stringify(p.dispositivo_id)}, null)' class="w-full flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mb-2 text-left">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <span class="text-sm text-texto truncate">${escaparHtml(p.nombre)}</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-mono text-xs text-muted w-5 flex-shrink-0">${posicion}</span>
+            ${p.foto
+                            ? `<img src="${p.foto}" class="w-6 h-6 rounded-full object-cover bg-cancha flex-shrink-0"/>`
+                            : `<div class="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center text-accent text-[10px] font-bold flex-shrink-0">${escaparHtml((p.nombre || '?').charAt(0).toUpperCase())}</div>`}
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="text-sm text-texto truncate">${medallaPosicion(posicion)}${escaparHtml(p.nombre)}</span>
+              ${esDispositivoAdmin(p.dispositivo_id)
+                            ? `<span class="text-[9px] font-semibold text-accent uppercase flex-shrink-0">Admin</span>`
+                            : (p.club ? `<img src="${escudoClubPorNombre(p.club)}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(p.club)}');" class="w-4 h-4 rounded-full object-cover bg-elevado flex-shrink-0" title="${escaparHtml(p.club)}"/>` : '')}
+            </div>
           </div>
-          ${esDispositivoAdmin(p.dispositivo_id)
-                        ? `<span class="text-[9px] font-semibold text-accent uppercase flex-shrink-0">Admin</span>`
-                        : (p.club ? `<img src="${escudoClubPorNombre(p.club)}" onerror="this.onerror=null; this.src=escudoPorDefecto('${escaparHtml(p.club)}');" class="w-4 h-4 rounded-full object-cover bg-elevado flex-shrink-0" title="${escaparHtml(p.club)}"/>` : '')}
+          <span class="font-mono text-sm font-bold text-accent flex-shrink-0">${p.elo}</span>
         </button>
-      `).join('')
+      `;
+                }).join('')
                 : `<p class="text-center text-muted text-sm py-8">${PRODE_BUSQUEDA.trim() ? `No se encontraron participantes para "${escaparHtml(PRODE_BUSQUEDA)}".` : 'Todavía no hay participantes.'}</p>`;
+
+            const paginacionParticipantes = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mt-2">
+      <button onclick="cambiarPaginaParticipantesProde(-1)" class="p-1.5 text-muted disabled:opacity-25" ${PRODE_PARTICIPANTES_PAGINA <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${PRODE_PARTICIPANTES_PAGINA + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaParticipantesProde(1)" class="p-1.5 text-muted disabled:opacity-25" ${PRODE_PARTICIPANTES_PAGINA >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
             document.getElementById('modal-contenido').innerHTML = `
     <div class="flex items-center justify-between mb-1">
       <h2 class="font-display text-lg tracking-wide">🏆 Ranking</h2>
@@ -5022,10 +5510,16 @@
       <button onclick="cambiarVistaRankingProde('participantes')" class="flex-1 text-[11px] font-semibold px-2 py-1.5 rounded-full border bg-accent text-cancha border-accent">Participantes</button>
     </div>
     <input id="prode-busqueda-input" type="text" value="${escaparHtml(PRODE_BUSQUEDA)}" placeholder="Buscar participante…" class="w-full bg-elevado border border-borde rounded-xl px-3 py-2 text-xs text-texto placeholder:text-muted mb-3"/>
-    <p class="text-[10px] text-muted mb-3">${lista.length} jugando · orden alfabético</p>
+        <p class="text-[10px] text-muted mb-3">${lista.length} jugando · Ranking Elo · <button onclick="abrirQueEsElo()" class="underline font-semibold">¿Qué es Elo?</button></p>
     ${filas}
+    ${paginacionParticipantes}
   `;
             configurarBusquedaProde();
+        }
+
+        function cambiarPaginaParticipantesProde(delta) {
+            PRODE_PARTICIPANTES_PAGINA += delta;
+            renderParticipantesProde();
         }
 
         function cambiarPaginaRankingProde(delta) {
@@ -5048,6 +5542,7 @@
             predicciones.sort((a, b) => Number(b.fecha_nro) - Number(a.fecha_nro));
 
             const nombre = predicciones[0]?.nombre_apellido || '—';
+            const foto = predicciones[0]?.avatar_url || null;
 
             const totalPaginas = Math.max(1, Math.ceil(predicciones.length / PRODE_POR_PAGINA));
             const pagina = Math.min(Math.max(PRODE_DETALLE_PAGINA, 0), totalPaginas - 1);
@@ -5098,7 +5593,12 @@
 
             document.getElementById('modal-contenido').innerHTML = `
     <div class="flex items-center justify-between mb-3">
-      <h2 class="font-display text-lg tracking-wide truncate">${escaparHtml(nombre)}</h2>
+      <div class="flex items-center gap-2 min-w-0">
+        ${foto
+                    ? `<img src="${foto}" class="w-7 h-7 rounded-full object-cover bg-cancha flex-shrink-0"/>`
+                    : `<div class="w-7 h-7 rounded-full bg-accent/10 flex items-center justify-center text-accent text-xs font-bold flex-shrink-0">${escaparHtml((nombre || '?').charAt(0).toUpperCase())}</div>`}
+        <h2 class="font-display text-lg tracking-wide truncate">${escaparHtml(nombre)}</h2>
+      </div>
       <button onclick="renderRankingProde()" class="text-[11px] font-semibold text-accent uppercase tracking-wide flex-shrink-0">← Ranking</button>
     </div>
     <p class="text-[10px] text-muted mb-3">🟢 +3 exacto · 🔵 +1 acierto · 🔴 0 sin acierto</p>
@@ -6365,9 +6865,84 @@
       <button onclick="renderAdminPanelCategorias()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">📋 Cargar resultado</button>
       <button onclick="renderAdminEditarResultado()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">✏️ Editar resultado</button>
       <button onclick="renderAdminAjustarPuntos()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">⚖️ Ajustar puntos</button>
-      <button onclick="renderAdminResumenFecha()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">📢 Resumen de fecha</button>
+            <button onclick="renderAdminResumenFecha()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">📢 Resumen de fecha</button>
+      <button onclick="renderAdminModerarFotos()" class="w-full text-left bg-elevado rounded-xl px-3 py-3 text-sm font-semibold text-texto">🖼️ Moderar fotos de perfil</button>
     </div>
   `;
+        }
+
+        async function renderAdminModerarFotos() {
+            document.getElementById('admin-contenido').innerHTML = `<p class="text-center text-muted text-sm py-8">Cargando…</p>`;
+
+            const { data: perfiles, error } = await supabaseClient
+                .from('prode_perfiles')
+                .select('user_id, nombre_apellido, avatar_url')
+                .not('avatar_url', 'is', null)
+                .order('nombre_apellido');
+
+            if (error) {
+                document.getElementById('admin-contenido').innerHTML = `<p class="text-center text-live text-sm py-8">Error: ${error.message}</p>`;
+                return;
+            }
+
+            const filas = (perfiles || []).map((p) => `
+      <div class="flex items-center justify-between bg-elevado rounded-xl px-3 py-2.5 mb-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <img src="${p.avatar_url}" class="w-9 h-9 rounded-full object-cover bg-cancha flex-shrink-0"/>
+          <span class="text-sm text-texto truncate">${escaparHtml(p.nombre_apellido || '')}</span>
+        </div>
+                <button onclick="pedirConfirmarEliminarAvatarAdmin('${p.user_id}', ${JSON.stringify(p.nombre_apellido || '')})" class="text-[11px] font-semibold text-live uppercase flex-shrink-0">Quitar foto</button>
+      </div>
+    `).join('');
+
+            document.getElementById('admin-contenido').innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="renderAdminMenu()" class="text-muted text-sm">←</button>
+      <h2 class="font-display text-base tracking-wide">Moderar fotos</h2>
+      <span></span>
+    </div>
+    ${filas || '<p class="text-center text-muted text-sm py-8">Nadie subió una foto todavía.</p>'}
+  `;
+        }
+
+        let ADMIN_AVATAR_PENDIENTE = null;
+
+        function pedirConfirmarEliminarAvatarAdmin(userId, nombre) {
+            ADMIN_AVATAR_PENDIENTE = { userId, nombre };
+            document.getElementById('confirmar-eliminar-avatar-admin-texto').textContent = `¿Eliminar la foto de perfil de "${nombre}"?`;
+            const modal = document.getElementById('modal-confirmar-eliminar-avatar-admin');
+            modal.style.zIndex = '999999';
+            modal.style.position = 'fixed';
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+        }
+
+        function cerrarConfirmarEliminarAvatarAdmin() {
+            const modal = document.getElementById('modal-confirmar-eliminar-avatar-admin');
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+            ADMIN_AVATAR_PENDIENTE = null;
+        }
+
+        function confirmarEliminarAvatarAdmin() {
+            if (!ADMIN_AVATAR_PENDIENTE) return;
+            const { userId } = ADMIN_AVATAR_PENDIENTE;
+            cerrarConfirmarEliminarAvatarAdmin();
+
+            fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ accion: 'moderarAvatar', pin: ADMIN_PIN_ACTUAL, datos: { user_id: userId } }),
+            })
+                .then((r) => r.json())
+                .then((res) => {
+                    if (!res.ok) throw new Error(res.error);
+                    (PRODE_DATOS || []).forEach((pr) => {
+                        if (String(pr.dispositivo_id) === String(userId)) pr.avatar_url = null;
+                    });
+                    renderAdminModerarFotos();
+                })
+                .catch((err) => alert('Error: ' + err.message));
         }
 
         let ADMIN_RESUMEN_CATEGORIA = null;
@@ -7695,6 +8270,56 @@
         cargarDatos();
         restaurarSesionSiExiste();
     </script>
+
+    <!-- MODAL: CONFIRMAR ELIMINAR FOTO DE PERFIL -->
+    <div id="modal-confirmar-eliminar-avatar"
+        class="hidden fixed inset-0 z-[999999] flex items-center justify-center px-6">
+        <div class="absolute inset-0 bg-black/80"></div>
+        <div class="relative bg-surface border border-borde rounded-3xl p-6 max-w-xs w-full text-center">
+            <p class="text-sm text-texto mb-5">¿Estás seguro que deseas eliminar la foto de perfil?</p>
+            <div class="flex gap-2">
+                <button onclick="cerrarConfirmarEliminarAvatar()"
+                    class="flex-1 bg-elevado text-texto font-semibold text-sm rounded-xl py-2.5">Cancelar</button>
+                <button onclick="confirmarEliminarAvatar()"
+                    class="flex-1 bg-live text-white font-semibold text-sm rounded-xl py-2.5">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFIRMAR ELIMINAR FOTO DESDE ADMIN -->
+    <div id="modal-confirmar-eliminar-avatar-admin"
+        class="hidden fixed inset-0 z-[999999] flex items-center justify-center px-6">
+        <div class="absolute inset-0 bg-black/80"></div>
+        <div class="relative bg-surface border border-borde rounded-3xl p-6 max-w-xs w-full text-center">
+            <p id="confirmar-eliminar-avatar-admin-texto" class="text-sm text-texto mb-5"></p>
+            <div class="flex gap-2">
+                <button onclick="cerrarConfirmarEliminarAvatarAdmin()"
+                    class="flex-1 bg-elevado text-texto font-semibold text-sm rounded-xl py-2.5">Cancelar</button>
+                <button onclick="confirmarEliminarAvatarAdmin()"
+                    class="flex-1 bg-live text-white font-semibold text-sm rounded-xl py-2.5">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ¿QUÉ ES ELO? -->
+    <div id="modal-que-es-elo" class="hidden fixed inset-0 z-[999999] flex items-center justify-center px-6">
+        <div class="absolute inset-0 bg-black/80" onclick="cerrarQueEsElo()"></div>
+        <div class="relative bg-surface border border-borde rounded-3xl p-6 max-w-xs w-full">
+            <h3 class="font-display text-lg tracking-wide mb-3">¿Qué es el Elo?</h3>
+            <div class="text-sm text-muted space-y-2 mb-5">
+                <p>Es un puntaje que mide qué tan bien venís prediciendo, no solo cuántos puntos totales tenés.</p>
+                <p>Todos arrancan en <span class="text-texto font-semibold">1500</span>. Cada fecha, se compara lo que
+                    sacaste contra lo que sacó cada uno de los demás que también predijo esa jornada.</p>
+                <p>Si le "ganaste" a alguien (más puntos que él esa fecha), le quitás un poco de su rating y te lo sumás
+                    vos — más si esa persona venía mejor ubicada que vos (una sorpresa vale más), menos si ya se
+                    esperaba.</p>
+                <p>Por eso dos personas con el mismo puntaje total pueden tener Elo distinto: importa contra quién y
+                    cuándo sacaste esos puntos, no solo cuántos.</p>
+            </div>
+            <button onclick="cerrarQueEsElo()"
+                class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Entendido</button>
+        </div>
+    </div>
 
     <!-- MODAL DE CONFIRMACIÓN AL DESFAVORITEAR -->
     <div id="modal-confirmar-desfav" class="hidden fixed inset-0 z-[999999] fixed items-center justify-center px-6">
