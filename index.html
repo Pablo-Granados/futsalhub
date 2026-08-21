@@ -1174,22 +1174,8 @@
                 const [json, [equiposSupabase, partidosSupabase, prodeSupabase]] = await Promise.all([fetchAppsScript, fetchSupabase]);
                 json.data.prode = prodeSupabase;
 
-                // Guardamos las horas que vinieron de Apps Script antes de pisar con Supabase
-                // (Supabase todavía no tiene columna hora/fecha_hora)
-                const mapaHoras = new Map();
-                json.data.partidos.forEach((p) => {
-                    if (p.fecha_hora) {
-                        const clave = [p.categoria, p.fecha_nro, p.id_local, p.id_visitante].join('|');
-                        mapaHoras.set(clave, p.fecha_hora);
-                    }
-                });
-
                 json.data.equipos = mapearEquiposDesdeSupabase(equiposSupabase);
-                json.data.partidos = mapearPartidosDesdeSupabase(partidosSupabase).map((p) => {
-                    const clave = [p.categoria, p.fecha_nro, p.id_local, p.id_visitante].join('|');
-                    const fecha_hora = mapaHoras.get(clave);
-                    return fecha_hora ? { ...p, fecha_hora } : p;
-                });
+                json.data.partidos = mapearPartidosDesdeSupabase(partidosSupabase);
 
                 guardarDuracionCarga(Date.now() - inicioCarga);
                 aplicarDatos(json.data, true);
@@ -1238,23 +1224,35 @@
 
         async function traerDeSupabase(tabla, columnas, columnaOrden) {
             const TAMANO_PAGINA = 1000;
-            let desde = 0;
-            let todasLasFilas = [];
             const orden = columnaOrden || 'id';
 
-            while (true) {
-                const { data, error } = await supabaseClient
-                    .from(tabla)
-                    .select(columnas || '*')
-                    .order(orden, { ascending: true })
-                    .range(desde, desde + TAMANO_PAGINA - 1);
+            const primera = await supabaseClient
+                .from(tabla)
+                .select(columnas || '*', { count: 'exact' })
+                .order(orden, { ascending: true })
+                .range(0, TAMANO_PAGINA - 1);
 
-                if (error) throw new Error('supabase_' + error.message);
+            if (primera.error) throw new Error('supabase_' + primera.error.message);
 
-                todasLasFilas = todasLasFilas.concat(data);
+            let todasLasFilas = primera.data;
+            const total = primera.count ?? todasLasFilas.length;
 
-                if (data.length < TAMANO_PAGINA) break; // ya trajimos todo
-                desde += TAMANO_PAGINA;
+            if (total > TAMANO_PAGINA) {
+                const pedidosRestantes = [];
+                for (let desde = TAMANO_PAGINA; desde < total; desde += TAMANO_PAGINA) {
+                    pedidosRestantes.push(
+                        supabaseClient
+                            .from(tabla)
+                            .select(columnas || '*')
+                            .order(orden, { ascending: true })
+                            .range(desde, desde + TAMANO_PAGINA - 1)
+                    );
+                }
+                const resultados = await Promise.all(pedidosRestantes);
+                resultados.forEach((r) => {
+                    if (r.error) throw new Error('supabase_' + r.error.message);
+                    todasLasFilas = todasLasFilas.concat(r.data);
+                });
             }
 
             return todasLasFilas;
@@ -1278,6 +1276,7 @@
         function mapearPartidosDesdeSupabase(lista) {
             return lista.map((p) => ({
                 fecha: p.fecha,
+                fecha_hora: (p.fecha && p.hora) ? `${p.fecha} ${p.hora}` : null,
                 fecha_nro: p.fecha_nro,
                 etiqueta_fecha: p.etiqueta_fecha === 'Sin programar' ? '' : p.etiqueta_fecha,
                 categoria: p.categoria,
@@ -1545,10 +1544,10 @@
             if (COMUNIDAD_BANNER_INTERVALO) { clearInterval(COMUNIDAD_BANNER_INTERVALO); COMUNIDAD_BANNER_INTERVALO = null; }
             document.getElementById('vista-contenido').innerHTML = `
     <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2">🏘️ Comunidad</h3>
-    <div id="banner-comunidad"></div>
+        <div id="banner-comunidad"></div>
     ${bloqueCardProde()}
     ${bloqueCardNoticias()}
-    <p class="text-center text-muted text-sm py-8">Videos — próximamente.</p>
+    ${bloqueCardVideos()}
   `;
 
             if (SPONSORS.length) {
@@ -1613,24 +1612,14 @@
             });
         }
 
-        function bloqueCardNoticias() {
-            if (!NOTICIAS_DATOS.length) return '';
-
-            const totalPaginas = Math.max(1, Math.ceil(NOTICIAS_DATOS.length / NOTICIAS_POR_PAGINA));
-            if (NOTICIAS_PAGINA >= totalPaginas) NOTICIAS_PAGINA = totalPaginas - 1;
-            if (NOTICIAS_PAGINA < 0) NOTICIAS_PAGINA = 0;
-            const inicio = NOTICIAS_PAGINA * NOTICIAS_POR_PAGINA;
-            const items = NOTICIAS_DATOS.slice(inicio, inicio + NOTICIAS_POR_PAGINA);
-
-            const cards = items.map((n, i) => {
-                const idxReal = inicio + i;
-                const destacada = normalizarBooleano(n.destacada);
-                const esExterna = !!(n.link_url && String(n.link_url).trim());
-                const tag = esExterna ? 'a' : 'button';
-                const atributos = esExterna
-                    ? `href="${n.link_url}" target="_blank" rel="noopener"`
-                    : `onclick="abrirNoticia(${idxReal})" type="button"`;
-                return `
+        function tarjetaNoticia(n, idxReal) {
+            const destacada = normalizarBooleano(n.destacada);
+            const esExterna = !!(n.link_url && String(n.link_url).trim());
+            const tag = esExterna ? 'a' : 'button';
+            const atributos = esExterna
+                ? `href="${n.link_url}" target="_blank" rel="noopener"`
+                : `onclick="abrirNoticia(${idxReal})" type="button"`;
+            return `
       <${tag} ${atributos} class="flex gap-3 bg-surface border ${destacada ? 'border-accent' : 'border-borde'} rounded-2xl p-3 mb-2 text-left w-full">
         <img src="${n.imagen_url || ''}" onerror="this.style.display='none'" class="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover bg-elevado flex-shrink-0"/>
         <div class="min-w-0 flex-1">
@@ -1646,30 +1635,195 @@
         </div>
       </${tag}>
     `;
-            }).join('');
+        }
+
+        function tieneVideo(n) {
+            return !!(n.video_url && String(n.video_url).trim());
+        }
+
+        function noticiasSinVideoConIndice() {
+            return NOTICIAS_DATOS.map((n, idx) => ({ n, idx })).filter(({ n }) => !tieneVideo(n));
+        }
+
+        function videosConIndice() {
+            return NOTICIAS_DATOS.map((n, idx) => ({ n, idx })).filter(({ n }) => tieneVideo(n));
+        }
+
+        function bloqueCardNoticias() {
+            const items = noticiasSinVideoConIndice();
+            if (!items.length) return '';
+
+            const NOTICIAS_PREVIEW_HOME = 2;
+            const cards = items.slice(0, NOTICIAS_PREVIEW_HOME).map(({ n, idx }) => tarjetaNoticia(n, idx)).join('');
+
+            const verMas = items.length > NOTICIAS_PREVIEW_HOME
+                ? `<button onclick="abrirTodasNoticias()" class="w-full text-center text-[11px] font-semibold text-accent uppercase tracking-wide py-2">Ver todas las noticias →</button>`
+                : '';
+
+            return `
+    <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2 mt-1">📰 Noticias</h3>
+    ${cards}
+    ${verMas}
+  `;
+        }
+
+        function abrirTodasNoticias() {
+            NOTICIAS_PAGINA = 0;
+            renderTodasNoticias();
+            document.getElementById('modal-equipo').classList.remove('hidden');
+        }
+
+        function renderTodasNoticias() {
+            const todasSinVideo = noticiasSinVideoConIndice();
+            const totalPaginas = Math.max(1, Math.ceil(todasSinVideo.length / NOTICIAS_POR_PAGINA));
+            if (NOTICIAS_PAGINA >= totalPaginas) NOTICIAS_PAGINA = totalPaginas - 1;
+            if (NOTICIAS_PAGINA < 0) NOTICIAS_PAGINA = 0;
+            const inicio = NOTICIAS_PAGINA * NOTICIAS_POR_PAGINA;
+            const items = todasSinVideo.slice(inicio, inicio + NOTICIAS_POR_PAGINA);
+            const cards = items.map(({ n, idx }) => tarjetaNoticia(n, idx)).join('');
 
             const paginacion = totalPaginas > 1 ? `
-    <div class="flex items-center justify-between mb-3">
-      <button onclick="cambiarPaginaNoticias(-1)" class="p-1.5 text-muted disabled:opacity-25" ${NOTICIAS_PAGINA <= 0 ? 'disabled' : ''}>
+    <div class="flex items-center justify-between mt-2 mb-1">
+      <button onclick="cambiarPaginaTodasNoticias(-1)" class="p-1.5 text-muted disabled:opacity-25" ${NOTICIAS_PAGINA <= 0 ? 'disabled' : ''}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <span class="text-[10px] text-muted uppercase">Página ${NOTICIAS_PAGINA + 1} de ${totalPaginas}</span>
-      <button onclick="cambiarPaginaNoticias(1)" class="p-1.5 text-muted disabled:opacity-25" ${NOTICIAS_PAGINA >= totalPaginas - 1 ? 'disabled' : ''}>
+      <button onclick="cambiarPaginaTodasNoticias(1)" class="p-1.5 text-muted disabled:opacity-25" ${NOTICIAS_PAGINA >= totalPaginas - 1 ? 'disabled' : ''}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
       </button>
     </div>
   ` : '';
 
-            return `
-    <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2 mt-1">📰 Noticias</h3>
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-3">📰 Noticias</h2>
     ${cards}
     ${paginacion}
   `;
         }
 
-        function cambiarPaginaNoticias(delta) {
+        function cambiarPaginaTodasNoticias(delta) {
             NOTICIAS_PAGINA += delta;
-            renderComunidad();
+            renderTodasNoticias();
+        }
+
+        function extraerYoutubeId(url) {
+            if (!url) return null;
+            const patrones = [
+                /youtu\.be\/([a-zA-Z0-9_-]{6,})/,
+                /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{6,})/,
+                /youtube\.com\/shorts\/([a-zA-Z0-9_-]{6,})/,
+                /youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/,
+            ];
+            for (const p of patrones) {
+                const m = String(url).match(p);
+                if (m) return m[1];
+            }
+            return null;
+        }
+
+        function tarjetaVideo(n, idxReal) {
+            const videoId = extraerYoutubeId(n.video_url);
+            const miniatura = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : (n.imagen_url || '');
+            return `
+    <button onclick="abrirVideo(${idxReal})" type="button" class="flex gap-3 bg-surface border border-borde rounded-2xl p-3 mb-2 text-left w-full">
+      <div class="relative w-14 h-14 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-elevado flex-shrink-0">
+        <img src="${miniatura}" onerror="this.style.display='none'" class="w-full h-full object-cover"/>
+        <span class="absolute inset-0 flex items-center justify-center">
+          <span class="bg-black/60 rounded-full w-6 h-6 flex items-center justify-center text-white text-xs">▶</span>
+        </span>
+      </div>
+      <div class="min-w-0 flex-1">
+        ${n.categoria ? `<span class="inline-block text-[9px] font-bold uppercase tracking-wide text-accent bg-accent/10 rounded-full px-2 py-0.5 mb-1">${escaparHtml(n.categoria)}</span>` : ''}
+        <p class="text-sm font-bold text-texto leading-snug line-clamp-2">${escaparHtml(n.titulo || '')}</p>
+        <p class="text-[10px] text-muted mt-1.5">${formatearFechaVisual(n.fecha)}</p>
+      </div>
+    </button>
+  `;
+        }
+
+        function bloqueCardVideos() {
+            const items = videosConIndice();
+            if (!items.length) return '';
+
+            const VIDEOS_PREVIEW_HOME = 2;
+            const cards = items.slice(0, VIDEOS_PREVIEW_HOME).map(({ n, idx }) => tarjetaVideo(n, idx)).join('');
+
+            const verMas = items.length > VIDEOS_PREVIEW_HOME
+                ? `<button onclick="abrirTodosVideos()" class="w-full text-center text-[11px] font-semibold text-accent uppercase tracking-wide py-2">Ver todos los videos →</button>`
+                : '';
+
+            return `
+    <h3 class="text-xs font-semibold text-texto uppercase tracking-wide px-1 mb-2 mt-3">🎥 Videos</h3>
+    ${cards}
+    ${verMas}
+  `;
+        }
+
+        let VIDEOS_PAGINA = 0;
+
+        function abrirTodosVideos() {
+            VIDEOS_PAGINA = 0;
+            renderTodosVideos();
+            document.getElementById('modal-equipo').classList.remove('hidden');
+        }
+
+        function renderTodosVideos() {
+            const items = videosConIndice();
+            const totalPaginas = Math.max(1, Math.ceil(items.length / NOTICIAS_POR_PAGINA));
+            if (VIDEOS_PAGINA >= totalPaginas) VIDEOS_PAGINA = totalPaginas - 1;
+            if (VIDEOS_PAGINA < 0) VIDEOS_PAGINA = 0;
+            const inicio = VIDEOS_PAGINA * NOTICIAS_POR_PAGINA;
+            const pagina = items.slice(inicio, inicio + NOTICIAS_POR_PAGINA);
+            const cards = pagina.map(({ n, idx }) => tarjetaVideo(n, idx)).join('');
+
+            const paginacion = totalPaginas > 1 ? `
+    <div class="flex items-center justify-between mt-2 mb-1">
+      <button onclick="cambiarPaginaVideos(-1)" class="p-1.5 text-muted disabled:opacity-25" ${VIDEOS_PAGINA <= 0 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <span class="text-[10px] text-muted uppercase">Página ${VIDEOS_PAGINA + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaVideos(1)" class="p-1.5 text-muted disabled:opacity-25" ${VIDEOS_PAGINA >= totalPaginas - 1 ? 'disabled' : ''}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  ` : '';
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-3">🎥 Videos</h2>
+    ${cards}
+    ${paginacion}
+  `;
+        }
+
+        function cambiarPaginaVideos(delta) {
+            VIDEOS_PAGINA += delta;
+            renderTodosVideos();
+        }
+
+        function abrirVideo(idx) {
+            const n = NOTICIAS_DATOS[idx];
+            if (!n) return;
+            const videoId = extraerYoutubeId(n.video_url);
+            ULTIMO_VOLVER_CUSTOM = null;
+            PALMARES_VOLVER_MEDALLERO = false;
+            document.getElementById('btn-volver-modal').classList.add('hidden');
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-base tracking-wide mb-3">${escaparHtml(n.titulo || '')}</h2>
+    ${videoId ? `
+      <div class="relative w-full rounded-xl overflow-hidden bg-black" style="aspect-ratio:16/9;">
+        <iframe
+          src="https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1"
+          class="absolute inset-0 w-full h-full"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen>
+        </iframe>
+      </div>
+    ` : `<p class="text-xs text-muted text-center py-8">No pude cargar este video.</p>`}
+    ${n.caption ? `<p class="text-xs text-muted mt-3">${escaparHtml(n.caption)}</p>` : ''}
+  `;
+            document.getElementById('modal-equipo').classList.remove('hidden');
         }
 
         function abrirNoticia(idx) {
@@ -3282,8 +3436,9 @@
     <p class="text-xs text-muted mb-4">Iniciá sesión para predecir y ver el ranking.</p>
     <input id="input-login-email" type="email" placeholder="tu@mail.com" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
     <input id="input-login-password" type="password" placeholder="Contraseña" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
-        <button id="btn-login-prode" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Entrar</button>
+    <button id="btn-login-prode" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Entrar</button>
     <button onclick="pedirRecuperarPassword('input-login-email', 'error-login-prode')" class="w-full text-center text-[11px] font-semibold text-accent uppercase tracking-wide mt-3 py-1">¿Olvidaste tu contraseña?</button>
+    <button onclick="renderRegistroProde()" class="w-full text-center text-[11px] font-semibold text-muted uppercase tracking-wide mt-1 py-1">¿No tenés cuenta? Creá una</button>
     <p id="error-login-prode" class="text-center text-xs text-live mt-2 min-h-[16px]"></p>
   `;
 
@@ -3315,7 +3470,70 @@
             renderLoginProde();
         }
 
-                async function pedirRecuperarPassword(inputEmailId, estadoElId) {
+        function renderRegistroProde() {
+            const opcionesClub = obtenerClubsUnicos()
+                .map((e) => `<option value="${escaparHtml(e.nombre)}">${escaparHtml(e.nombre)}</option>`)
+                .join('');
+
+            document.getElementById('modal-contenido').innerHTML = `
+    <h2 class="font-display text-lg tracking-wide mb-1">Crear cuenta</h2>
+    <p class="text-xs text-muted mb-4">Para jugar al Prode y aparecer en el ranking.</p>
+    <input id="registro-nombre" type="text" placeholder="Nombre y apellido" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
+    <label class="text-[11px] uppercase text-muted font-semibold">¿De qué club sos hincha?</label>
+    <select id="registro-club" class="w-full mt-1.5 bg-elevado border border-borde rounded-xl p-3 text-sm text-texto mb-3">
+      <option value="">Elegí tu club</option>
+      ${opcionesClub}
+    </select>
+    <input id="registro-email" type="email" placeholder="tu@mail.com" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
+    <input id="registro-password" type="password" placeholder="Elegí una contraseña" class="w-full bg-elevado border border-borde rounded-xl p-3 text-sm text-texto placeholder:text-muted mb-3"/>
+    <button id="btn-crear-cuenta" class="w-full bg-accent text-cancha font-semibold text-sm rounded-xl py-2.5">Crear cuenta</button>
+    <button onclick="renderLoginProde()" class="w-full text-center text-[11px] font-semibold text-muted uppercase tracking-wide mt-3 py-1">Ya tengo cuenta</button>
+    <p id="error-registro-prode" class="text-center text-xs text-live mt-2 min-h-[16px]"></p>
+  `;
+
+            document.getElementById('btn-crear-cuenta').onclick = crearCuentaProde;
+        }
+
+        async function crearCuentaProde() {
+            const nombre = document.getElementById('registro-nombre').value.trim();
+            const club = document.getElementById('registro-club').value;
+            const email = document.getElementById('registro-email').value.trim();
+            const password = document.getElementById('registro-password').value;
+            const estadoEl = document.getElementById('error-registro-prode');
+
+            if (nombre.length < 3) { estadoEl.textContent = 'Ingresá tu nombre y apellido.'; return; }
+            if (!club) { estadoEl.textContent = 'Elegí tu club.'; return; }
+            if (!email) { estadoEl.textContent = 'Ingresá tu mail.'; return; }
+            if (!password || password.length < 6) { estadoEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
+
+            estadoEl.textContent = 'Creando cuenta…';
+            estadoEl.className = 'text-center text-xs mt-2 text-muted';
+
+            const { data, error } = await supabaseClient.auth.signUp({ email, password });
+            if (error) {
+                estadoEl.textContent = error.message.includes('already') ? 'Ese mail ya tiene cuenta — usá "Entrar".' : 'Error: ' + error.message;
+                estadoEl.className = 'text-center text-xs mt-2 text-live';
+                return;
+            }
+
+            await supabaseClient.from('prode_perfiles').insert([{
+                user_id: data.user.id,
+                nombre_apellido: nombre,
+                club_hincha: club,
+            }]);
+
+            if (!data.session) {
+                // El proyecto tiene "confirmar mail" activado — todavía no hay sesión.
+                estadoEl.textContent = '✓ Te mandamos un mail para confirmar tu cuenta. Confirmá y volvé a entrar.';
+                estadoEl.className = 'text-center text-xs mt-2 text-accent';
+                return;
+            }
+
+            await cargarSesionProde(data.session);
+            renderFormularioProde();
+        }
+
+        async function pedirRecuperarPassword(inputEmailId, estadoElId) {
             const email = document.getElementById(inputEmailId).value.trim();
             const estadoEl = document.getElementById(estadoElId);
             if (!email) { estadoEl.textContent = 'Ingresá tu mail primero.'; return; }
@@ -3352,7 +3570,7 @@
                 const { error } = await supabaseClient.auth.updateUser({ password: nueva });
                 if (error) { estadoEl.textContent = 'Error: ' + error.message; return; }
 
-                                estadoEl.textContent = '✓ Contraseña actualizada.';
+                estadoEl.textContent = '✓ Contraseña actualizada.';
                 estadoEl.className = 'text-center text-xs mt-2 text-accent';
                 setTimeout(() => { abrirProde(); }, 1000);
             };
@@ -5165,6 +5383,8 @@
         function cerrarModalEquipo() {
             document.getElementById('modal-equipo').classList.add('hidden');
             document.getElementById('btn-volver-modal').classList.add('hidden');
+            // Si había un video de YouTube reproduciéndose, esto corta el iframe y detiene el audio/imagen.
+            document.getElementById('modal-contenido').innerHTML = '';
         }
 
         /* ============================================================
@@ -5255,7 +5475,7 @@
             document.getElementById('modal-admin').classList.add('hidden');
         }
 
-                async function renderAdminPin() {
+        async function renderAdminPin() {
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (session) {
                 const ok = await verificarSesionEsAdmin(session.access_token);
