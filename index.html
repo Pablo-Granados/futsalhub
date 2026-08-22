@@ -8033,6 +8033,10 @@
                 SPONSOR_GRANDE_SESION_MOSTRADO = true;
                 mostrarSponsorGrande(false);
             }
+
+            if (!SPONSORS.length) {
+                completarSiModalEsperando(); // si el modal quedó esperando datos, se cierra solo — no hay nada que mostrar
+            }
         }
 
         /* --- Banner fijo, arriba del nav, rota solo cada 15s --- */
