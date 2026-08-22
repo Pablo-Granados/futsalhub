@@ -22,14 +22,14 @@
     <meta property="og:title" content="FutsalHub — Fixture en vivo del futsal de Rosario">
     <meta property="og:description"
         content="Resultados en vivo, tabla de posiciones, Prode y más de la Liga de Futsal de Rosario.">
-        <meta property="og:image" content="https://futsalhub.com.ar/img/futsalhub-logo.png">
+    <meta property="og:image" content="https://futsalhub.com.ar/img/futsalhub-logo.png">
     <meta property="og:url" content="https://futsalhub.com.ar">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="FutsalHub — Fixture en vivo del futsal de Rosario">
     <meta name="twitter:description"
         content="Resultados en vivo, tabla de posiciones, Prode y más de la Liga de Futsal de Rosario.">
-        <meta name="twitter:image" content="https://futsalhub.com.ar/img/futsalhub-logo.png">
+    <meta name="twitter:image" content="https://futsalhub.com.ar/img/futsalhub-logo.png">
     <link rel="stylesheet" href="css/output.css">
     <style>
         .lineas-cancha {
@@ -3804,6 +3804,26 @@
                 .select('nombre_apellido, club_hincha, favoritos, favoritos_categorias, avatar_url')
                 .eq('user_id', PRODE_USER_ID)
                 .maybeSingle();
+            if (!perfil) {
+                // ¿Quedó un registro pendiente de cuando confirmamos el mail? Lo aplicamos ahora.
+                try {
+                    const pendiente = JSON.parse(localStorage.getItem('perfil_pendiente') || 'null');
+                    if (pendiente && pendiente.email === session.user.email) {
+                        await supabaseClient.from('prode_perfiles').upsert([{
+                            user_id: PRODE_USER_ID,
+                            nombre_apellido: pendiente.nombre,
+                            club_hincha: pendiente.club,
+                        }]);
+                        localStorage.removeItem('perfil_pendiente');
+                        NOMBRE_USUARIO = pendiente.nombre;
+                        CLUB_USUARIO = pendiente.club;
+                        AVATAR_USUARIO = null;
+                        actualizarIconoCuentaHeader();
+                        return;
+                    }
+                } catch (e) { /* sin drama, sigue con el fallback normal */ }
+            }
+
             NOMBRE_USUARIO = perfil ? perfil.nombre_apellido : (session.user.email || 'Usuario');
             CLUB_USUARIO = perfil ? perfil.club_hincha : null;
             AVATAR_USUARIO = perfil ? perfil.avatar_url : null;
@@ -3967,16 +3987,24 @@
                 return;
             }
 
-            await supabaseClient.from('prode_perfiles').insert([{
+            if (!data.session) {
+                // El proyecto tiene "confirmar mail" activado — todavía no hay sesión,
+                // así que no podemos crear el perfil ahora (RLS lo rechazaría en silencio).
+                // Guardamos nombre/club pendientes para aplicarlos apenas confirme y entre.
+                try { localStorage.setItem('perfil_pendiente', JSON.stringify({ email, nombre, club })); } catch (e) { }
+                estadoEl.textContent = '✓ Te mandamos un mail para confirmar tu cuenta. Confirmá y volvé a entrar.';
+                estadoEl.className = 'text-center text-xs mt-2 text-accent';
+                return;
+            }
+
+            const { error: errorPerfil } = await supabaseClient.from('prode_perfiles').upsert([{
                 user_id: data.user.id,
                 nombre_apellido: nombre,
                 club_hincha: club,
             }]);
-
-            if (!data.session) {
-                // El proyecto tiene "confirmar mail" activado — todavía no hay sesión.
-                estadoEl.textContent = '✓ Te mandamos un mail para confirmar tu cuenta. Confirmá y volvé a entrar.';
-                estadoEl.className = 'text-center text-xs mt-2 text-accent';
+            if (errorPerfil) {
+                estadoEl.textContent = 'Se creó tu cuenta, pero hubo un error guardando tu perfil: ' + errorPerfil.message + '. Entrá a Mi cuenta para completarlo.';
+                estadoEl.className = 'text-center text-xs mt-2 text-live';
                 return;
             }
 
@@ -4179,7 +4207,7 @@
             return ratings;
         }
 
-                function diagnosticarEloJugador(dispositivoId) {
+        function diagnosticarEloJugador(dispositivoId) {
             const partidosPrimeraA = filtrarPorTemporada(PARTIDOS).filter((p) => p.categoria === 'Primera A' && normalizarFase(p.fase) === 'Regular');
             const porPartido = new Map();
             partidosPrimeraA.forEach((p) => porPartido.set(String(p.id_local) + '_' + String(p.id_visitante) + '_' + p.fecha_nro, p));
@@ -4399,8 +4427,7 @@
 
             const { error } = await supabaseClient
                 .from('prode_perfiles')
-                .update({ nombre_apellido: nombre, club_hincha: club })
-                .eq('user_id', PRODE_USER_ID);
+                .upsert({ user_id: PRODE_USER_ID, nombre_apellido: nombre, club_hincha: club });
 
             if (error) {
                 estadoEl.textContent = 'Error: ' + error.message;
